@@ -1,29 +1,34 @@
 # Hands-on-Lab and Demo Scripts
 All scripts required to run an Hands-on-Lab or demos
 
-# Setup the Server
+## Setup the Server
+In this section we will prep our server to host the labs and or demos
+### Prerequisites
+* Fresh install of a Ubuntu based system
+* WiFi or Wired Internet Connection
+* A NSB ( Atleast One Switch and One AP )
 
-## Install git and openssh-server and checkout the scripts
+### Install git and openssh-server and checkout the scripts
 ```
 sudo apt-get update
 sudo apt-get install -y git openssh-server
 git clone https://github.com/soleng2018/hol.git
 ```
 
-## Make all files executable
+### Make all files executable
 ```
 cd hol
 sudo chmod +x *
 ```
 
-## Install docker
+### Install docker
 If you already have docker installed you can skip this step
 ```
 ./installdocker.sh
 ```
 Select 1 as the option
 
-## Verify Docker is installed and running
+### Verify Docker is installed and running
 ```
 docker run hello-world
 ```
@@ -52,3 +57,4 @@ For more examples and ideas, visit:
  https://docs.docker.com/get-started/
 ```
 
+## Setup the hol

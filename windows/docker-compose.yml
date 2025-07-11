@@ -1,0 +1,35 @@
+# Check https://github.com/dockur/windows for details
+services:
+  windows:
+    image: dockurr/windows
+    container_name: windows
+    environment:
+      VERSION: "11"
+      RAM_SIZE: "4G"
+      CPU_CORES: "2"
+      USERNAME: "nile"
+      PASSWORD: "nile1234"
+      DHCP: "Y" # If using Static IP remove this line
+      ARGUMENTS: "-device usb-host,vendorid=0x1234,productid=0x1234" # Passing USB Wireless NIC. Remove this line if no WiF. Use lsusb to get vendorid and productid
+    devices:
+      - /dev/kvm
+      - /dev/net/tun
+      - /dev/vhost-net # Only needed if DHCP="Y". For static remove this line
+    device_cgroup_rules: # Only needed if DHCP="Y". For static remove this line
+      - 'c *:* rwm' # Only needed if DHCP="Y". For static remove this line
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 8006:8006
+      - 3389:3389/tcp
+      - 3389:3389/udp
+    volumes:
+      - ./windows:/storage
+    restart: always
+    stop_grace_period: 2m
+    networks:
+      pc_net: # This name needs to match the macvlan docker network name
+
+networks:
+  pc_net: # This name needs to match the macvlan docker network name
+    external: true

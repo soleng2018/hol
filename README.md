@@ -7,6 +7,7 @@ In this section we will prep our server to host the labs and or demos
 * Fresh install of a Ubuntu based system
 * WiFi or Wired Internet Connection
 * A NSB ( Atleast One Switch and One AP )
+* Server should have at least 2 ports if using WiFi as WAN else 3 ports are needed
 
 ### Install git and openssh-server and checkout the scripts
 ```
@@ -58,3 +59,36 @@ For more examples and ideas, visit:
 ```
 
 ## Setup the hol
+```
+./setup.sh
+```
+
+## Install Windows docker image
+There is an opensource project that makes it very simple to install windwos and macOS. You will need a Windows License to activate windows after a trial period ends. Please ensure to get one
+
+### Create a MACVLAN docker network
+In order to connect our windows/macOS containers directly to the physical network, we need to use the macvlan network driver to assign a MAC address to each containers interface.
+
+```
+docker network create -d macvlan \
+    --subnet=192.168.0.0/24 \
+    --gateway=192.168.0.1 \
+    --ip-range=192.168.0.96/28 \
+    -o parent=eno1 pc_net
+```
+* The pc_net is the network name. Update the docker-compose.yml file if you choose to use a different name
+* eno1 is the physical interface name. Replace it with your servers interface name (could be eth0 or enp1s0)
+
+If we are using static IP address in the container, then pick one IP address from the network defined. If using DHCP, then this subnet is not used. But you will need to define it in order to create pc_net
+
+#### Verify the pc_net of type macvlan is created
+```
+docker network ls
+```
+The output should contain the following entry apart from other netoworks
+```
+NETWORK ID     NAME      DRIVER    SCOPE
+..<snip>..
+abe2c167ba0a   pc_net    macvlan   local
+..<snip>..
+```

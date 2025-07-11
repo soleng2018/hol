@@ -1,13 +1,13 @@
 # Hands-on-Lab and Demo Scripts
-All scripts required to run an Hands-on-Lab or demos
+All scripts required to run hands-on labs or demos
 
 ## Setup the Server
-In this section we will prep our server to host the labs and or demos
+In this section we will prep our server to host the labs and/or demos
 ### Prerequisites
-* Fresh install of a Ubuntu based system
+* Fresh install of an Ubuntu-based system
 * WiFi or Wired Internet Connection
-* A NSB ( Atleast One Switch and One AP )
-* Server should have at least 2 ports if using WiFi as WAN else 3 ports are needed
+* A NSB (At least One Switch and One AP)
+* Server should have at least 2 ports if using WiFi as WAN, else 3 ports are needed
 
 ### Install git and openssh-server and checkout the scripts
 ```
@@ -64,9 +64,9 @@ For more examples and ideas, visit:
 ```
 
 ## Install Windows docker image
-There is an opensource project that makes it very simple to install windwos and macOS. You will need a Windows License to activate windows after a trial period ends. Please ensure to get one
+There is an open-source project that makes it very simple to install Windows and macOS. You will need a Windows License to activate Windows after a trial period ends. Please ensure to get one.
 
-### Check if your CPU supports virtulization
+### Check if your CPU supports virtualization
 ```
 sudo apt install cpu-checker
 sudo kvm-ok
@@ -74,7 +74,7 @@ sudo kvm-ok
 If you receive an error from kvm-ok indicating that KVM cannot be used, please check whether the virtualization extensions (Intel VT-x or AMD SVM) are enabled in your BIOS.
 
 ### Create a MACVLAN docker network
-In order to connect our windows/macOS containers directly to the physical network, we need to use the macvlan network driver to assign a MAC address to each containers interface.
+In order to connect our Windows/macOS containers directly to the physical network, we need to use the macvlan network driver to assign a MAC address to each container's interface.
 
 ```
 docker network create -d macvlan \
@@ -84,15 +84,15 @@ docker network create -d macvlan \
     -o parent=eno1 pc_net
 ```
 * The pc_net is the network name. Update the docker-compose.yml file if you choose to use a different name
-* eno1 is the physical interface name. Replace it with your servers interface name (could be eth0 or enp1s0)
+* eno1 is the physical interface name. Replace it with your server's interface name (could be eth0 or enp1s0)
 
-If we are using static IP address in the container, then pick one IP address from the network defined. If using DHCP, then this subnet is not used. But you will need to define it in order to create pc_net
+If we are using static IP address in the container, then pick one IP address from the network defined. If using DHCP, then this subnet is not used. But you will need to define it in order to create pc_net.
 
 #### Verify the pc_net of type macvlan is created
 ```
 docker network ls
 ```
-The output should contain the following entry apart from other netoworks
+The output should contain the following entry apart from other networks
 ```
 NETWORK ID     NAME      DRIVER    SCOPE
 ..<snip>..
@@ -100,8 +100,8 @@ abe2c167ba0a   pc_net    macvlan   local
 ..<snip>..
 ```
 
-### Bringup the windows container
-If passing a WiFi USB device, you will need to first get the vendorid and productid
+### Bring up the Windows container
+If passing a WiFi USB device, you will need to first get the vendorid and productid.
 Execute the following command and identify your device
 ```
 lsusb
@@ -111,7 +111,7 @@ In this example we are looking for
 Bus 001 Device 010: ID 2357:012d TP-Link Archer T3U [Realtek RTL8812BU]
 ```
 productid = 2357
-vendoris = 012d
+vendorid = 012d
 
 Update the line in docker-compose.yml
 ```
@@ -125,14 +125,20 @@ Hit Ctrl+X and Enter to save
 ```
 docker compose up -d
 ```
-### Attach the defaul docker bridge
-In order to use the web browser to manage the windows machine, attach the defaul docker network
+### Attach the default docker bridge
+In order to use the web browser to manage the Windows machine, attach the default docker network
 ```
 docker network connect bridge windows
 ```
-"**bridge**" is the the name default docker network and "**windows**" is the name of the container
+"**bridge**" is the name of the default docker network and "**windows**" is the name of the container
 
 * If you are on your host navigate to http://localhost:8006
 * If you are SSH'ed in to your server navigate to http://your-server-IP:8006
 
 ## Install Linux docker image
+```
+cd linux
+docker compose up -d
+docker network connect bridge ubuntu
+```
+"ubuntu" is the name of the container. Replace it if you used a different name

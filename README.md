@@ -99,7 +99,13 @@ Change you directory to the windows and run docker compose
 cd windows
 docker compose up -d
 ```
+### Attach the defaul docker bridge
+In order to use the web browser to manage the windows machine, attach the defaul docker network
+```
+docker network connect bridge windows
+```
+**bridge** is the the name default docker network and **windows** is the name of the container
 
 * If you are on your host navigate to http://localhost:8006
-* If you are SSH'ed in to your server navigate to http://<your-server-IP>:8006
+* If you are SSH'ed in to your server navigate to http://your-server-IP:8006
 

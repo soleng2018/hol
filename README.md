@@ -66,6 +66,13 @@ For more examples and ideas, visit:
 ## Install Windows docker image
 There is an opensource project that makes it very simple to install windwos and macOS. You will need a Windows License to activate windows after a trial period ends. Please ensure to get one
 
+### Check if your CPU supports virtulization
+```
+sudo apt install cpu-checker
+sudo kvm-ok
+```
+If you receive an error from kvm-ok indicating that KVM cannot be used, please check whether the virtualization extensions (Intel VT-x or AMD SVM) are enabled in your BIOS.
+
 ### Create a MACVLAN docker network
 In order to connect our windows/macOS containers directly to the physical network, we need to use the macvlan network driver to assign a MAC address to each containers interface.
 
@@ -94,9 +101,28 @@ abe2c167ba0a   pc_net    macvlan   local
 ```
 
 ### Bringup the windows container
-Change you directory to the windows and run docker compose
+If passing a WiFi USB device, you will need to first get the vendorid and productid
+Execute the following command and identify your device
+```
+lsusb
+```
+In this example we are looking for
+```
+Bus 001 Device 010: ID 2357:012d TP-Link Archer T3U [Realtek RTL8812BU]
+```
+productid = 2357
+vendoris = 012d
+
+Update the line in docker-compose.yml
 ```
 cd windows
+nano docker-compose.yml
+ARGUMENTS: "-device usb-host,vendorid=0x2357,productid=0x012d"
+```
+Hit Ctrl+X and Enter to save
+
+#### Run docker compose
+```
 docker compose up -d
 ```
 ### Attach the defaul docker bridge
@@ -109,3 +135,4 @@ docker network connect bridge windows
 * If you are on your host navigate to http://localhost:8006
 * If you are SSH'ed in to your server navigate to http://your-server-IP:8006
 
+## Install Linux docker image

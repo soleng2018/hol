@@ -92,3 +92,14 @@ NETWORK ID     NAME      DRIVER    SCOPE
 abe2c167ba0a   pc_net    macvlan   local
 ..<snip>..
 ```
+
+### Bringup the windows container
+Change you directory to the windows and run docker compose
+```
+cd windows
+docker compose up -d
+```
+
+* If you are on your host navigate to http://localhost:8006
+* If you are SSH'ed in to your server navigate to http://<your-server-IP>:8006
+

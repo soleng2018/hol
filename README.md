@@ -62,6 +62,20 @@ For more examples and ideas, visit:
 ```
 ./setup.sh
 ```
+### For Demos select the following
+* access
+* Select the interface to which the NSB will be connected e.g. enp1s0
+* Number of pods - 1
+* LAN IP - IP address of the NSB's default gateway
+* LAN Subnet - The subnet including the mask for the NSB Uplink
+
+### For training select the following
+* trunk
+* Select the interface to which the NSB will be connected e.g. enp1s0
+* Number of pods - 10
+* LAN IP - IP address of the NSB's default gateway
+* LAN Subnet - The subnet including the mask for the NSB Uplink
+Note: A Layer 2 switch will be needed. A trunk port from that switch will connect to the server. On the switch access vlans will need to be created for every NSB up links
 
 ## Install Windows docker image
 There is an open-source project that makes it very simple to install Windows and macOS. You will need a Windows License to activate Windows after a trial period ends. Please ensure to get one.

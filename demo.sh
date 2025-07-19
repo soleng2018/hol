@@ -8,36 +8,11 @@ check_interface() {
     fi
 }
 
-# Function to create bridge and VLAN
-create_bridge() {
-    local podID=$1
-    local vlanID=$2
-    local interfaceId=$interface.$vlanID
-    local bridgeName="br-lan-$podID"
-
-    sudo ip link add name "$bridgeName" type bridge
-    sudo ip link set "$bridgeName" up
-
-    if [[ "$mode" == "trunk" ]]; then
-        local interfaceId=$interface.$vlanID
-        sudo ip link add link "$interface" name "$interfaceId" type vlan id "$vlanID"    
-    else
-        local interfaceId=$interface
-    fi
-    
-    sudo ip link set "$interfaceId" up
-    sudo ip link set "$interfaceId" master "$bridgeName"
-    brctl show
-
-    echo "Created $interfaceId and mapped to $bridgeName"
-    echo "--------------------------------------------------------------"
-}
-
 # Function to run FRR container
 create_frr_container() {
-    local podID=$1
+    local podID=0
     local containerName="frr$podID"
-    docker run -dt --name "$containerName" --network=none --privileged \
+    docker run -dt --name "$containerName" --network=host --privileged \
     -v ./frr${podID}.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
@@ -48,9 +23,9 @@ create_frr_container() {
 
 # Function to run DHCPD container
 create_dhcpd_container() {
-    local podID=$1
+    local podID=0
     local containerName="dhcpd$podID"
-    docker run -dt --name "$containerName" --network=none --privileged \
+    docker run -dt --name "$containerName" --network=host --privileged \
      dhcpd sleep infinity
 
     echo "Started container $containerName"
@@ -58,46 +33,18 @@ create_dhcpd_container() {
 }
 
 create_radiusd_container() {
-    local podID=$1
+    local podID=0
     local containerName="radiusd$podID"
-    docker run -dt --name $containerName --network=none --privileged \
+    docker run -dt --name $containerName --network=host --privileged \
      radiusd
     
     echo "Started container $containerName"
     echo "---------------------------------------"
 }
 
-# Function to create veth pairs and attach to container namespace
-create_veth_pairs() {
-    local podID=$1
-
-    sudo ip link add veth-wan"$podID" type veth peer name eth0-wan"$podID"
-    sudo ip link add veth-lan"$podID" type veth peer name eth1-lan"$podID"
-    sudo ip link add frr-dhcpd-"$podID" type veth peer name eth2-dhcpd-"$podID"
-    sudo ip link add frr-radiusd-"$podID" type veth peer name eth3-radiusd-"$podID"
-
-    local pid=$(docker inspect -f '{{.State.Pid}}' frr"$podID")
-    sudo ip link set eth0-wan"$podID" netns "$pid"
-    sudo ip link set eth1-lan"$podID" netns "$pid"
-    sudo ip link set frr-dhcpd-"$podID" netns "$pid"
-    sudo ip link set frr-radiusd-"$podID" netns "$pid"
-
-    # Attach veth-lan to the LAN bridge
-    sudo ip link set veth-lan"$podID" master br-lan-"$podID"
-    sudo ip link set veth-lan"$podID" up
-
-    # Attach veth-wan to WAN bridge
-    sudo ip link set veth-wan"$podID" master "$wan_net"
-    sudo ip link set veth-wan"$podID" up
-    echo "Connected veth-wan$podID to $wan_net and brought it up"
-
-    echo "Veth pairs created and moved to frr$podID"
-    echo "--------------------------------------------------------------"
-}
-
 # Function to generate FRR config file
 generate_frr_config() {
-    local podID=$1
+    local podID=0
     local base_ip=$(echo "$wan_subnet" | cut -d/ -f1)
     local eth0_ip=$(echo "$base_ip" | awk -F. -v id=$podID '{printf "%d.%d.%d.%d", $1, $2, $3, 10 + id}')
     local config_file="frr${podID}.conf"

@@ -12,7 +12,7 @@ check_interface() {
 create_frr_container() {
     local podID=0
     local containerName="frr$podID"
-    docker run -dt --name "$containerName" --network=host --privileged --restart=unless-stopped \
+    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
     -v ./frr${podID}.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
@@ -25,7 +25,7 @@ create_frr_container() {
 create_dhcpd_container() {
     local podID=0
     local containerName="dhcpd$podID"
-    docker run -dt --name "$containerName" --network=host --privileged --restart=unless-stopped \
+    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      dhcpd
 
     echo "Started container $containerName"
@@ -35,7 +35,7 @@ create_dhcpd_container() {
 create_radiusd_container() {
     local podID=0
     local containerName="radiusd$podID"
-    docker run -dt --name $containerName --network=host --privileged --restart=unless-stopped \
+    docker run -dt --name $containerName --network=host --privileged --restart=always \
      radiusd
     
     echo "Started container $containerName"

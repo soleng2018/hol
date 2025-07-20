@@ -12,7 +12,7 @@ check_interface() {
 create_frr_container() {
     local podID=0
     local containerName="frr$podID"
-    docker run -dt --name "$containerName" --network=host --privileged \
+    docker run -dt --name "$containerName" --network=host --privileged --restart=unless-stopped \
     -v ./frr${podID}.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
@@ -25,8 +25,8 @@ create_frr_container() {
 create_dhcpd_container() {
     local podID=0
     local containerName="dhcpd$podID"
-    docker run -dt --name "$containerName" --network=host --privileged \
-     dhcpd sleep infinity
+    docker run -dt --name "$containerName" --network=host --privileged --restart=unless-stopped \
+     dhcpd
 
     echo "Started container $containerName"
     echo "--------------------------------------------------------------"
@@ -35,7 +35,7 @@ create_dhcpd_container() {
 create_radiusd_container() {
     local podID=0
     local containerName="radiusd$podID"
-    docker run -dt --name $containerName --network=host --privileged \
+    docker run -dt --name $containerName --network=host --privileged --restart=unless-stopped \
      radiusd
     
     echo "Started container $containerName"
@@ -45,8 +45,6 @@ create_radiusd_container() {
 # Function to generate FRR config file
 generate_frr_config() {
     local podID=0
-    local base_ip=$(echo "$wan_subnet" | cut -d/ -f1)
-    local eth0_ip=$(echo "$base_ip" | awk -F. -v id=$podID '{printf "%d.%d.%d.%d", $1, $2, $3, 10 + id}')
     local config_file="frr${podID}.conf"
 
     cat <<EOF > "$config_file"
@@ -57,24 +55,13 @@ log stdout
 ip forwarding
 no ipv6 forwarding
 !
-interface eth0
- ip address $eth0_ip/${wan_subnet#*/}
-!
-interface eth1
+interface $interface
  ip address $lan_ip
-!
-interface $dhcpd_interface
- ip address $dhcpd_frrIP
-!
-interface $radiusd_interface
- ip address $radiusd_frrIP
 !
 router ospf
  ospf router-id 1.1.1.1
  network $lan_subnet area 0
  default-information originate always
-!
-ip route 0.0.0.0/0 $wan_gw
 !
 line vty
 !
@@ -84,95 +71,12 @@ EOF
     echo "--------------------------------------------------------------"
 }
 
-# Function to rename interfaces inside container using nsenter
-rename_container_interfaces() {
-    local podID=$1
-    local pid=$(docker inspect -f '{{.State.Pid}}' frr"$podID")
-    sudo nsenter -t "$pid" -n ip link set eth0-wan"$podID" down
-    sudo nsenter -t "$pid" -n ip link set eth1-lan"$podID" down
-    sudo nsenter -t "$pid" -n ip link set frr-dhcpd-"$podID" down
-    sudo nsenter -t "$pid" -n ip link set frr-radiusd-"$podID" down
-    
-    sudo nsenter -t "$pid" -n ip link set eth0-wan"$podID" name eth0
-    sudo nsenter -t "$pid" -n ip link set eth1-lan"$podID" name eth1
-    sudo nsenter -t "$pid" -n ip link set frr-dhcpd-"$podID" name $dhcpd_interface
-    sudo nsenter -t "$pid" -n ip link set frr-radiusd-"$podID" name $radiusd_interface
-
-    sudo nsenter -t "$pid" -n ip link set eth0 up
-    sudo nsenter -t "$pid" -n ip link set eth1 up
-    sudo nsenter -t "$pid" -n ip link set $dhcpd_interface up
-    sudo nsenter -t "$pid" -n ip link set $radiusd_interface up
-
-    echo "Renamed interfaces for frr$podID"
-    echo "--------------------------------------------------------------"
-}
-
-# Function to enable NAT and IP routing for each pod
-enable_nat_and_routing() {
-    local podID=$1
-    local pid=$(docker inspect -f '{{.State.Pid}}' frr"$podID")
-
-    sudo nsenter -t "$pid" -n iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
-    sudo nsenter -t "$pid" -n sysctl net.ipv4.ip_forward=1
-
-    echo "Enabled NAT and IP forwarding for frr$podID"
-    echo "--------------------------------------------------------------"
-}
-
-# Configure DHCP server interfaces and start container
-configure_dhcpd() {
-    local podID=$1
-    local pid=$(docker inspect -f '{{.State.Pid}}' dhcpd"$podID")
-
-    sudo ip link set eth2-dhcpd-"$podID" netns $pid
-    sudo nsenter -t "$pid" -n ip link set eth2-dhcpd-"$podID" down
-    sudo nsenter -t "$pid" -n ip link set eth2-dhcpd-"$podID" name $dhcpd_interface
-    sudo nsenter -t "$pid" -n ip link set $dhcpd_interface up
-    sudo nsenter -t "$pid" -n ip a a $dhcpd_serverIP dev $dhcpd_interface
-    local ip_only=$(echo "$dhcpd_frrIP" | cut -d'/' -f1)
-    sudo nsenter -t "$pid" -n ip r a default via $ip_only 
-
-    # Start the dhcpd server
-    docker exec dhcpd"$podID" touch /var/lib/dhcp/dhcpd.leases
-    docker exec dhcpd"$podID" /usr/local/bin/startup.sh
-
-    echo "DHCPD configured for frr$podID"
-    echo "--------------------------------------------------------------"
-}
-
-# Configure RADIUS server interfaces and start container
-configure_radiusd() {
-    local podID=$1
-    local pid=$(docker inspect -f '{{.State.Pid}}' radiusd"$podID")
-
-    sudo ip link set eth3-radiusd-"$podID" netns $pid
-    sudo nsenter -t "$pid" -n ip link set eth3-radiusd-"$podID" down
-    sudo nsenter -t "$pid" -n ip link set eth3-radiusd-"$podID" name $radiusd_interface
-    sudo nsenter -t "$pid" -n ip link set $radiusd_interface up
-    sudo nsenter -t "$pid" -n ip a a $radiusd_serverIP dev $radiusd_interface
-    local ip_only=$(echo "$radiusd_frrIP" | cut -d'/' -f1)
-    sudo nsenter -t "$pid" -n ip r a default via $ip_only
-    echo "RADIUSD configured for frr$podID"
-    echo "--------------------------------------------------------------"     
-}
-
 # --- MAIN SCRIPT ---
 
 # Prompt for inputs
-read -p "access or trunk (If unsure hit enter) [access]: " mode
-mode=${mode:-access}
-
 read -p "Enter host interface name (e.g., eth0) [eth0]: " interface
 interface=${interface:-eth0}
 check_interface "$interface"
-
-if [[ "$mode" == "trunk" ]]; then
-  read -p "Enter number of pods [3]: " numPods
-  numPods=${numPods:-3}
-else
-  numPods=1
-fi
-
 
 read -p "Enter LAN IP (e.g., 172.16.0.1/30) [172.16.0.1/30]: " lan_ip
 lan_ip=${lan_ip:-172.16.0.1/30}
@@ -180,60 +84,25 @@ lan_ip=${lan_ip:-172.16.0.1/30}
 read -p "Enter LAN subnet (e.g., 172.16.0.0/30) [172.16.0.0/30]: " lan_subnet
 lan_subnet=${lan_subnet:-172.16.0.0/30}
 
-# Check if wan_net exisit. If not, create wan_net and extract the bridge information
-wan_net="br-wan-net"
-if docker network ls --format '{{.Name}}' | grep -q "^wan_net$"; then
-  echo "Docker network 'wan_net' already exists."
+# Enable NAT and ip_forward on host
+# Get the interface used for the default route (internet access)
+INTERNET_IFACE=$(ip route | awk '/^default/ {print $5; exit}')
 
-  # Extract subnet and gateway using jq
-  wan_subnet=$(docker network inspect wan_net -f '{{(index .IPAM.Config 0).Subnet}}')
-  wan_gw=$(docker network inspect wan_net -f '{{(index .IPAM.Config 0).Gateway}}')
-
+if [ -n "$INTERNET_IFACE" ]; then
+    echo "Internet-facing interface: $INTERNET_IFACE"
 else
-  wan_subnet=172.16.252.0/24
-  wan_gw=172.16.252.1
-  echo "Creating Docker network 'wan_net'..."
-  docker network create \
-    --driver bridge \
-    --subnet $wan_subnet \
-    --gateway $wan_gw \
-    --opt com.docker.network.bridge.name=$wan_net \
-    wan_net
-
-  if [ $? -eq 0 ]; then
-    echo "'wan_net' created successfully."
-  else
-    echo "Failed to create 'wan_net'."
+    echo "No default internet interface found." >&2
     exit 1
-  fi
 fi
 
-
-# Enable NAT and ip_forward on host
-#sudo iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
-#sudo sysctl net.ipv4.ip_forward=1
-
-# DHCP Server Subnet
-dhcpd_subnet="172.16.253.0/24"
-dhcpd_serverIP="172.16.253.2/24"
-dhcpd_frrIP="172.16.253.1/24"
-dhcpd_interface="eth2"
-
-# RADIUS Server Subnet
-radiusd_subnet="172.16.254.0/24"
-radiusd_serverIP="172.16.254.2/24"
-radiusd_frrIP="172.16.254.1/24"
-radiusd_interface="eth3"
+sudo iptables -t nat -A POSTROUTING -o $INTERNET_IFACE -j MASQUERADE
+sudo sysctl net.ipv4.ip_forward=1
+sudo iptables -A FORWARD -i $interface  -o $INTERNET_IFACE -j ACCEPT
+sudo iptables -A FORWARD -i $INTERNET_IFACE -o $interface -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # Install bridge-utils
 sudo apt-get update
 sudo apt-get install bridge-utils -y
-
-#Install nginx
-    echo "Installing nginx..."
-    sudo docker run -dt --name nginx-hol docker.io/nginx
-    echo "Nginx Installed"
-    echo "--------------------------------------------------------------"
 
 # Create shared FRR daemons file
 cat <<EOF > daemons
@@ -299,7 +168,7 @@ cat <<EOF > dhcpdContainerfile
 FROM ubuntu:latest
 
 # Install necessary tools
-RUN apt-get update && apt-get install -y iproute2 isc-dhcp-server
+RUN apt-get update && apt-get install -y iproute2 isc-dhcp-server freeradius-utils
 
 # Create a DHCPD startup script
 COPY dhcpdStartup.sh /usr/local/bin/startup.sh
@@ -307,6 +176,7 @@ RUN chmod +x /usr/local/bin/startup.sh
 
 # Copy the DHCP server configuration
 COPY ./dhcpd.conf /etc/dhcp/dhcpd.conf
+RUN touch /var/lib/dhcp/dhcpd.leases
 
 # Command to execute the startup script
 CMD ["/usr/local/bin/startup.sh"]
@@ -320,8 +190,17 @@ cat <<EOF > dhcpdStartup.sh
 #!/bin/bash
 set -e
 
+echo "$(date): Starting DHCP service startup script" >> /var/log/startup.log
+echo "$(date): Starting DHCP service startup script"
+
 # Start the DHCP server
-/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf -pf /var/run/dhcpd.pid $dhcpd_interface
+echo "$(date): Executing dhcpd command" >> /var/log/startup.log
+/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf -pf /var/run/dhcpd.pid $interface
+
+echo "$(date): DHCP server started, keeping container alive" >> /var/log/startup.log
+
+# Keep container running
+tail -f /var/log/startup.log
 EOF
 
 echo "Created dhcpdStartup.sh file"
@@ -361,7 +240,7 @@ ddns-update-style none;
 # No service will be given on this subnet, but declaring it helps the
 # DHCP server to understand the network topology.
 
-subnet 172.16.253.0 netmask 255.255.255.0 {
+subnet 172.16.0.0 netmask 255.255.255.252 {
 }
 #
 subnet 192.168.18.0 netmask 255.255.255.0 {
@@ -1703,6 +1582,7 @@ EOF
 # Create RADIUS Containerfile
 cat <<EOF > radiusdContainerfile
 FROM docker.io/freeradius/freeradius-server:latest
+RUN apt-get update && apt-get install -y iproute2 freeradius-utils
 COPY ./clients.conf /etc/raddb/clients.conf
 COPY ./authorize /etc/raddb/mods-config/files/authorize
 COPY ./dictionary.nile /usr/share/freeradius/dictionary.nile
@@ -1718,27 +1598,18 @@ echo "RADIUSD Image has been created"
 echo "--------------------------------------------------------------"
 
 # Loop through all pods
-for ((i=1; i<=numPods; i++)); do
-    vlanID=$((10 + i))
-    echo "Creating Pod$i"
-    create_bridge "$i" "$vlanID"
-    generate_frr_config "$i"
-    create_frr_container "$i"
-    create_veth_pairs "$i"
-    rename_container_interfaces "$i"
-    enable_nat_and_routing "$i"
-    create_dhcpd_container "$i"
-    configure_dhcpd "$i"
-    create_radiusd_container "$i"
-    configure_radiusd "$i"
-    echo "=========================================================="
-done
+echo "Creating Pod"
+generate_frr_config
+create_frr_container
+create_dhcpd_container
+create_radiusd_container
+echo "=========================================================="
 
-echo "✅ Setup complete for $numPods pods."
+echo "✅ Setup complete for pods."
 echo ""
 echo "______________________________________________________________"
 echo "| NSB's Default Gateway: $lan_ip                             |"
 echo "|          NSB's Subnet: $lan_subnet                         |"
-echo "|        DHCP Server IP: $dhcpd_serverIP                     |"
-echo "|      RADIUS Server IP: $radiusd_serverIP                   |"
+echo "|        DHCP Server IP: $lan_ip                             |"
+echo "|      RADIUS Server IP: $lan_ip                             |"
 echo "|____________________________________________________________|"

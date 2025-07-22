@@ -138,7 +138,7 @@ iptables -A FORWARD -i $INTERNET_IFACE -o $interface -m state --state ESTABLISHE
 EOF
 
 # Make it executable
-chmod +x /usr/local/bin/setup-nat.sh
+sudo chmod +x /usr/local/bin/setup-nat.sh
 
 sudo tee /etc/systemd/system/setup-nat.service > /dev/null <<'EOF'
 [Unit]

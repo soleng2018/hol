@@ -127,9 +127,9 @@ WantedBy=multi-user.target
 EOF
 
 # Reload systemd and enable/start the service
-systemctl daemon-reexec
-systemctl enable setup-nat.service
-systemctl start setup-nat.service
+sudo systemctl daemon-reexec
+sudo systemctl enable setup-nat.service
+sudo systemctl start setup-nat.service
 
 # Install bridge-utils
 #sudo apt-get update

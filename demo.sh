@@ -85,6 +85,34 @@ read -p "Enter LAN subnet (e.g., 172.16.0.0/30) [172.16.0.0/30]: " lan_subnet
 lan_subnet=${lan_subnet:-172.16.0.0/30}
 lan_net_addr=$(echo "$lan_subnet" | cut -d'/' -f1)
 
+CONNECTION_NAME=$(nmcli -t -f NAME,DEVICE connection show --active | grep "^.*:$interface$" | cut -d: -f1)
+
+# If no active connection, try looking for any connection using the device
+if [ -z "$CONNECTION_NAME" ]; then
+    CONNECTION_NAME=$(nmcli -t -f NAME,DEVICE connection show | grep ":$interface$" | cut -d: -f1)
+fi
+
+# Exit if still not found
+if [ -z "$CONNECTION_NAME" ]; then
+    echo "❌ No NetworkManager connection found for $IFACE"
+    exit 1
+fi
+
+echo "✅ Found connection: $CONNECTION_NAME"
+
+# Set static IP with no gateway and no DNS
+nmcli connection modify "$CONNECTION_NAME" \
+    ipv4.addresses "$lan_ip" \
+    ipv4.gateway "" \
+    ipv4.dns "" \
+    ipv4.method manual
+
+# Bring the connection up
+nmcli connection down "$CONNECTION_NAME"
+nmcli connection up "$CONNECTION_NAME"
+
+echo "✅ $interface is now configured with static IP $lan_ip (no gateway, no DNS)"
+
 # Enable NAT and ip_forward on host
 # Get the interface used for the default route (internet access)
 INTERNET_IFACE=$(ip route | awk '/^default/ {print $5; exit}')

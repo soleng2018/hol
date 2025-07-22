@@ -96,14 +96,44 @@ else
     exit 1
 fi
 
-sudo iptables -t nat -A POSTROUTING -o $INTERNET_IFACE -j MASQUERADE
-sudo sysctl net.ipv4.ip_forward=1
-sudo iptables -A FORWARD -i $interface  -o $INTERNET_IFACE -j ACCEPT
-sudo iptables -A FORWARD -i $INTERNET_IFACE -o $interface -m state --state ESTABLISHED,RELATED -j ACCEPT
+# Create setup-nat.sh dynamically
+cat <<EOF > /usr/local/bin/setup-nat.sh
+#!/bin/bash
+
+# Enable IP forwarding
+sysctl -w net.ipv4.ip_forward=1
+
+# Add iptables rules
+iptables -t nat -A POSTROUTING -o $INTERNET_IFACE -j MASQUERADE
+iptables -A FORWARD -i $LAN_IFACE -o $INTERNET_IFACE -j ACCEPT
+iptables -A FORWARD -i $INTERNET_IFACE -o $LAN_IFACE -m state --state ESTABLISHED,RELATED -j ACCEPT
+EOF
+
+# Make it executable
+chmod +x /usr/local/bin/setup-nat.sh
+
+cat <<EOF > /etc/systemd/system/setup-nat.service
+[Unit]
+Description=Custom NAT and IP Forwarding Rules
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/setup-nat.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd and enable/start the service
+systemctl daemon-reexec
+systemctl enable setup-nat.service
+systemctl start setup-nat.service
 
 # Install bridge-utils
-sudo apt-get update
-sudo apt-get install bridge-utils -y
+#sudo apt-get update
+#sudo apt-get install bridge-utils -y
 
 # Create shared FRR daemons file
 cat <<EOF > daemons

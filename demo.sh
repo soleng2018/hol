@@ -140,7 +140,7 @@ EOF
 # Make it executable
 chmod +x /usr/local/bin/setup-nat.sh
 
-cat <<EOF > /etc/systemd/system/setup-nat.service
+sudo tee /etc/systemd/system/setup-nat.service > /dev/null <<'EOF'
 [Unit]
 Description=Custom NAT and IP Forwarding Rules
 After=network.target

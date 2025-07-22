@@ -125,7 +125,7 @@ else
 fi
 
 # Create setup-nat.sh dynamically
-sudo cat <<EOF > /usr/local/bin/setup-nat.sh
+sudo tee /usr/local/bin/setup-nat.sh > /dev/null <<'EOF'
 #!/bin/bash
 
 # Enable IP forwarding

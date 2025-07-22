@@ -125,7 +125,7 @@ else
 fi
 
 # Create setup-nat.sh dynamically
-sudo tee /usr/local/bin/setup-nat.sh > /dev/null <<'EOF'
+sudo tee /usr/local/bin/setup-nat.sh > /dev/null <<EOF
 #!/bin/bash
 
 # Enable IP forwarding
@@ -140,7 +140,7 @@ EOF
 # Make it executable
 sudo chmod +x /usr/local/bin/setup-nat.sh
 
-sudo tee /etc/systemd/system/setup-nat.service > /dev/null <<'EOF'
+sudo tee /etc/systemd/system/setup-nat.service > /dev/null <<EOF
 [Unit]
 Description=Custom NAT and IP Forwarding Rules
 After=network.target

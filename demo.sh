@@ -83,6 +83,7 @@ lan_ip=${lan_ip:-172.16.0.1/30}
 
 read -p "Enter LAN subnet (e.g., 172.16.0.0/30) [172.16.0.0/30]: " lan_subnet
 lan_subnet=${lan_subnet:-172.16.0.0/30}
+lan_net_addr=$(echo "$lan_subnet" | cut -d'/' -f1)
 
 # Enable NAT and ip_forward on host
 # Get the interface used for the default route (internet access)
@@ -240,7 +241,7 @@ ddns-update-style none;
 # No service will be given on this subnet, but declaring it helps the
 # DHCP server to understand the network topology.
 
-subnet 172.16.0.0 netmask 255.255.255.252 {
+subnet $lan_net_addr netmask 255.255.255.252 {
 }
 #
 subnet 192.168.18.0 netmask 255.255.255.0 {

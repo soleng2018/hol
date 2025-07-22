@@ -133,8 +133,8 @@ sysctl -w net.ipv4.ip_forward=1
 
 # Add iptables rules
 iptables -t nat -A POSTROUTING -o $INTERNET_IFACE -j MASQUERADE
-iptables -A FORWARD -i $LAN_IFACE -o $INTERNET_IFACE -j ACCEPT
-iptables -A FORWARD -i $INTERNET_IFACE -o $LAN_IFACE -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -i $interface -o $INTERNET_IFACE -j ACCEPT
+iptables -A FORWARD -i $INTERNET_IFACE -o $interface -m state --state ESTABLISHED,RELATED -j ACCEPT
 EOF
 
 # Make it executable

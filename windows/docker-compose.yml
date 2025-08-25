@@ -1,4 +1,3 @@
-# Check https://github.com/dockur/windows for details
 services:
   windows:
     image: dockurr/windows
@@ -10,13 +9,15 @@ services:
       USERNAME: "nile"
       PASSWORD: "nile1234"
       DHCP: "Y" # If using Static IP remove this line
-      ARGUMENTS: "-device usb-host,vendorid=0x1234,productid=0x1234" # Passing USB Wireless NIC. Remove this line if no WiF. Use lsusb to get vendorid and productid
+      #ARGUMENTS: "-device usb-host,vendorid=0x2357,productid=0x012d -device usb-host,vendorid=0x0bda,productid=0x8153"
+      ARGUMENTS: "-device usb-host,hostbus=2,hostaddr=4" # Passing USB Wireless NIC. Remove this line if no WiF. Use lsusb to get vendorid and productid
     devices:
       - /dev/kvm
       - /dev/net/tun
       - /dev/vhost-net # Only needed if DHCP="Y". For static remove this line
       - /dev/bus/usb # This line is only needed when passing USB
-    device_cgroup_rules: # Only needed if DHCP="Y". For static remove this line
+    device_cgroup_rules:
+      # Only needed if DHCP="Y". For static remove this line
       - 'c *:* rwm' # Only needed if DHCP="Y". For static remove this line
     cap_add:
       - NET_ADMIN
@@ -26,11 +27,38 @@ services:
       - 3389:3389/udp
     volumes:
       - ./windows:/storage
+      - ./data:/data
     restart: always
     stop_grace_period: 2m
-    networks:
-      pc_net: # This name needs to match the macvlan docker network name
+    labels:
+      - traefik.enable=true
 
+      # Main web interface route (with Authentik)
+      - traefik.http.routers.windows1-web.rule=Host(`windows1.nilenetworks.com`) && !PathPrefix(`/websockify`)
+      - traefik.http.routers.windows1-web.entrypoints=websecure
+      - traefik.http.routers.windows1-web.tls=true
+      - traefik.http.routers.windows1-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.windows1-web.service=windows1-svc
+      - traefik.http.routers.windows1-web.middlewares=authentik@file
+
+      # WebSocket route (without Authentik)
+      - traefik.http.routers.windows1-ws.rule=Host(`windows1.nilenetworks.com`) && PathPrefix(`/websockify`)
+      - traefik.http.routers.windows1-ws.entrypoints=websecure
+      - traefik.http.routers.windows1-ws.tls=true
+      - traefik.http.routers.windows1-ws.tls.certresolver=letsencrypt
+      - traefik.http.routers.windows1-ws.service=windows1-svc
+      - traefik.http.routers.windows1-ws.middlewares=windows1-ws-headers
+
+      # Service definition
+      - traefik.http.services.windows1-svc.loadBalancer.server.port=8006
+      - traefik.http.services.windows1-svc.loadBalancer.server.scheme=http
+
+      # WebSocket headers middleware
+      - traefik.http.middlewares.windows1-ws-headers.headers.customrequestheaders.Connection=upgrade
+      - traefik.http.middlewares.windows1-ws-headers.headers.customrequestheaders.Upgrade=websocket
+      - traefik.http.middlewares.windows1-ws-headers.headers.customrequestheaders.Sec-WebSocket-Version=13
+    networks:
+      - traefik
 networks:
-  pc_net: # This name needs to match the macvlan docker network name
+  traefik:
     external: true

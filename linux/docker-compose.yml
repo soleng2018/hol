@@ -1,19 +1,21 @@
-# Check https://github.com/qemus/qemu for details
 services:
   qemu:
     image: qemux/qemu
     container_name: ubuntu
     environment:
-      BOOT: "ubuntu"
+      BOOT: "ubuntus"
       RAM_SIZE: "4G"
       CPU_CORES: "2"
       DHCP: "Y" # If using Static IP remove this line
-      #ARGUMENTS: "-device usb-host,vendorid=0x1234,productid=0x1234" # Passing USB Wireless NIC. Remove this line if no WiF. Use lsusb to get vendorid and productid
+      #ARGUMENTS: "-device usb-host,vendorid=0x148f,productid=0x5370"
+      ARGUMENTS: "-device usb-host,hostbus=1,hostaddr=6 -device usb-host,vendorid=0x0bda,productid=0x8153"
     devices:
       - /dev/kvm
       - /dev/net/tun
       - /dev/vhost-net # Only needed if DHCP="Y". For static remove this line
-    device_cgroup_rules: # Only needed if DHCP="Y". For static remove this line
+      - /dev/bus/usb # This line is only needed when passing USB
+    device_cgroup_rules:
+      # Only needed if DHCP="Y". For static remove this line
       - 'c *:* rwm' # Only needed if DHCP="Y". For static remove this line
     cap_add:
       - NET_ADMIN
@@ -23,9 +25,36 @@ services:
       - ./ubuntu:/storage
     restart: always
     stop_grace_period: 2m
+    labels:
+      - traefik.enable=true
+
+      # Main web interface route (with Authentik)
+      - traefik.http.routers.linux1-web.rule=Host(`lin1.nilenetworks.com`) && !PathPrefix(`/websockify`)
+      - traefik.http.routers.linux1-web.entrypoints=websecure
+      - traefik.http.routers.linux1-web.tls=true
+      - traefik.http.routers.linux1-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.linux1-web.service=linux1-svc
+      - traefik.http.routers.linux1-web.middlewares=authentik@file
+
+      # WebSocket route (without Authentik)
+      - traefik.http.routers.linux1-ws.rule=Host(`lin1.nilenetworks.com`) && PathPrefix(`/websockify`)
+      - traefik.http.routers.linux1-ws.entrypoints=websecure
+      - traefik.http.routers.linux1-ws.tls=true
+      - traefik.http.routers.linux1-ws.tls.certresolver=letsencrypt
+      - traefik.http.routers.linux1-ws.service=linux1-svc
+      - traefik.http.routers.linux1-ws.middlewares=linux1-ws-headers
+
+      # Service definition
+      - traefik.http.services.linux1-svc.loadBalancer.server.port=8006
+      - traefik.http.services.linux1-svc.loadBalancer.server.scheme=http
+
+      # WebSocket headers middleware
+      - traefik.http.middlewares.linux1-ws-headers.headers.customrequestheaders.Connection=upgrade
+      - traefik.http.middlewares.linux1-ws-headers.headers.customrequestheaders.Upgrade=websocket
+      - traefik.http.middlewares.linux1-ws-headers.headers.customrequestheaders.Sec-WebSocket-Version=13
     networks:
-      pc_net: # This name needs to match the macvlan docker network name
+      - traefik
 
 networks:
-  pc_net: # This name needs to match the macvlan docker network name
+  traefik:
     external: true

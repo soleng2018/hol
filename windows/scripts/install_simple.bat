@@ -19,18 +19,23 @@ echo Auth Type: %SSID_AUTH_TYPE%
 
 REM Function to generate random number between min and max
 :random
+if "%1"=="" goto :eof
+if "%2"=="" goto :eof
 set /a "random_num=%random% %% (%2 - %1 + 1) + %1"
 goto :eof
 
 REM Main loop
 :main_loop
     REM Generate random reconnect time
+    echo DEBUG: RECONNECT_MIN_TIME=%RECONNECT_MIN_TIME%, RECONNECT_MAX_TIME=%RECONNECT_MAX_TIME%
     call :random %RECONNECT_MIN_TIME% %RECONNECT_MAX_TIME%
     set reconnect_time=!random_num!
+    echo DEBUG: Generated reconnect_time=!reconnect_time!
     
     echo.
     echo Waiting !reconnect_time! minutes before reconnecting to WiFi...
-    timeout /t !reconnect_time! /nobreak >nul
+    set /a reconnect_seconds=!reconnect_time! * 60
+    timeout /t !reconnect_seconds! /nobreak >nul
     
     REM Show current WiFi status
     echo Current WiFi status:
@@ -76,7 +81,8 @@ REM Main loop
         set speedtest_time=!random_num!
         
         echo Waiting !speedtest_time! minutes before running speedtest...
-        timeout /t !speedtest_time! /nobreak >nul
+        set /a speedtest_seconds=!speedtest_time! * 60
+        timeout /t !speedtest_seconds! /nobreak >nul
         
         REM Run speedtest
         echo.

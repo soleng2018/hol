@@ -22,22 +22,6 @@ REM Function to generate random number between min and max
 set /a "random_num=%random% %% (%2 - %1 + 1) + %1"
 goto :eof
 
-REM Function to check if WiFi profile exists
-:check_profile
-echo Checking if WiFi profile exists for %SSID_NAME%...
-netsh wlan show profiles | findstr /i "%SSID_NAME%" >nul
-if !errorlevel! neq 0 (
-    echo WiFi profile not found. Creating profile...
-    if "%SSID_AUTH_TYPE%"=="PEAP" (
-        netsh wlan add profile filename="%TEMP%\wifi_profile.xml"
-    ) else if "%SSID_AUTH_TYPE%"=="PSK" (
-        netsh wlan add profile filename="%TEMP%\wifi_profile.xml"
-    ) else (
-        echo Warning: Unknown auth type. Attempting basic connection...
-    )
-)
-goto :eof
-
 REM Main loop
 :main_loop
     REM Generate random reconnect time
@@ -48,46 +32,43 @@ REM Main loop
     echo Waiting !reconnect_time! minutes before reconnecting to WiFi...
     timeout /t !reconnect_time! /nobreak >nul
     
+    REM Show current WiFi status
+    echo Current WiFi status:
+    netsh wlan show interfaces
+    
     REM Disconnect from current WiFi
+    echo.
     echo Disconnecting from current WiFi...
     netsh wlan disconnect
     
     REM Wait a moment
-    timeout /t 5 /nobreak >nul
+    timeout /t 3 /nobreak >nul
     
-    REM Check if profile exists, if not try to connect anyway
-    call :check_profile
+    REM Show available networks
+    echo.
+    echo Scanning for available networks...
+    netsh wlan show profiles | findstr /i "%SSID_NAME%"
     
-    REM Reconnect to WiFi - try different methods
+    REM Try to connect using the most reliable method
+    echo.
     echo Attempting to connect to %SSID_NAME%...
     
-    REM Method 1: Try connecting by profile name first
-    netsh wlan connect name="%SSID_NAME%" >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo Profile connection failed, trying SSID connection...
-        REM Method 2: Try connecting by SSID
-        netsh wlan connect ssid="%SSID_NAME%" >nul 2>&1
-        if !errorlevel! neq 0 (
-            echo SSID connection failed, trying interface connection...
-            REM Method 3: Try connecting to any available network with this SSID
-            for /f "tokens=*" %%i in ('netsh wlan show profiles ^| findstr /i "%SSID_NAME%"') do (
-                set "profile_line=%%i"
-                if "!profile_line!" neq "" (
-                    echo Found profile: !profile_line!
-                    netsh wlan connect name="%SSID_NAME%"
-                )
-            )
-        )
-    )
+    REM First, try to connect by profile name (most reliable)
+    netsh wlan connect name="%SSID_NAME%"
     
     REM Wait for connection to establish
     echo Waiting for WiFi connection to establish...
-    timeout /t 10 /nobreak >nul
+    timeout /t 15 /nobreak >nul
     
-    REM Check if connected (wait a bit more for connection to establish)
-    timeout /t 5 /nobreak >nul
+    REM Check connection status
+    echo.
+    echo Checking connection status...
+    netsh wlan show interfaces | findstr /i "state"
+    
+    REM Check if connected
     netsh wlan show interfaces | findstr /i "state.*connected" >nul
     if !errorlevel! equ 0 (
+        echo.
         echo WiFi connected successfully!
         
         REM Generate random speedtest time
@@ -98,6 +79,7 @@ REM Main loop
         timeout /t !speedtest_time! /nobreak >nul
         
         REM Run speedtest
+        echo.
         echo Running speedtest...
         if exist "speedtest.exe" (
             speedtest.exe
@@ -105,9 +87,22 @@ REM Main loop
             echo Error: speedtest.exe not found in current directory!
         )
     ) else (
+        echo.
         echo Warning: WiFi connection failed!
-        echo Current WiFi status:
-        netsh wlan show interfaces
+        echo Attempting alternative connection methods...
+        
+        REM Try connecting by SSID only
+        echo Trying SSID-only connection...
+        netsh wlan connect ssid="%SSID_NAME%"
+        timeout /t 10 /nobreak >nul
+        
+        REM Check again
+        netsh wlan show interfaces | findstr /i "state.*connected" >nul
+        if !errorlevel! equ 0 (
+            echo WiFi connected on second attempt!
+        ) else (
+            echo WiFi connection still failed. Will retry in next cycle.
+        )
     )
     
     echo.

@@ -1,0 +1,19 @@
+#Name of SSID to connect to
+SSID_NAME="Alonso-ENT"
+# Wireless AUTH TYPE. Can be PSK or PEAP
+SSID_AUTH_TYPE= PEAP 
+
+#This is to be used if AUTH_TYPE=PEAP
+PEAP_USERNAME="USERNAME" 
+PEAP_PASSWORD="PASSWORD" 
+
+# #This is to be used if AUTH_TYPE=PSK
+PSK="PASSPHRASE" 
+
+#Connect time. Choose a random number between MIN and MAX and then reconnect to the WiFi Network
+RECONNECT_MIN_TIME=5 # In minutes. 
+RECONNECT_MAX_TIME=10 # In Minutes
+
+#Speedtest time. Choose a random number between MIN and MAX and then do a speedtest
+SPEEDTEST_MIN_TIME=5 # In minutes. 
+SPEEDTEST_MAX_TIME=10 # In Minutes

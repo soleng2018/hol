@@ -43,12 +43,15 @@ echo Creating WiFi profile for %SSID_NAME%...
 
 if "%SSID_AUTH_TYPE%"=="PSK" (
     echo Creating PSK profile...
+    call :create_psk_xml
     netsh wlan add profile filename="%TEMP%\wifi_profile_psk.xml"
 ) else if "%SSID_AUTH_TYPE%"=="PEAP" (
     echo Creating PEAP profile...
+    call :create_peap_xml
     netsh wlan add profile filename="%TEMP%\wifi_profile_peap.xml"
 ) else (
     echo Creating basic profile...
+    call :create_basic_xml
     netsh wlan add profile filename="%TEMP%\wifi_profile_basic.xml"
 )
 

@@ -24,18 +24,46 @@ if "%2"=="" goto :eof
 set /a "random_num=%random% %% (%2 - %1 + 1) + %1"
 goto :eof
 
-REM Function to check if WiFi profile exists
-:check_profile
-echo Checking if WiFi profile exists for %SSID_NAME%...
-netsh wlan show profiles | findstr /i "%SSID_NAME%" >nul
-if !errorlevel! neq 0 (
-    echo WiFi profile not found. Creating profile...
-    if "%SSID_AUTH_TYPE%"=="PEAP" (
-        netsh wlan add profile filename="%TEMP%\wifi_profile.xml"
-    ) else if "%SSID_AUTH_TYPE%"=="PSK" (
-        netsh wlan add profile filename="%TEMP%\wifi_profile.xml"
+REM Function to create WiFi profile using simple netsh commands
+:create_simple_profile
+echo.
+echo Creating WiFi profile for %SSID_NAME%...
+
+REM Delete existing profile if it exists
+netsh wlan delete profile name="%SSID_NAME%" >nul 2>&1
+
+if "%SSID_AUTH_TYPE%"=="PSK" (
+    echo Creating PSK profile with password...
+    netsh wlan add profile name="%SSID_NAME%" ssid="%SSID_NAME%" keyMaterial="%PSK%" keyUsage=persistent
+) else if "%SSID_AUTH_TYPE%"=="PEAP" (
+    echo Creating PEAP profile...
+    netsh wlan add profile name="%SSID_NAME%" ssid="%SSID_NAME%" userData="%PEAP_USERNAME%"
+) else (
+    echo Creating basic open profile...
+    netsh wlan add profile name="%SSID_NAME%" ssid="%SSID_NAME%"
+)
+
+echo Profile creation command completed with return code: !errorlevel!
+
+REM Verify profile was created
+echo.
+echo Verifying profile creation...
+netsh wlan show profiles | findstr /i "%SSID_NAME%"
+if !errorlevel! equ 0 (
+    echo SUCCESS: Profile created and verified!
+    echo.
+    echo Profile details:
+    netsh wlan show profile name="%SSID_NAME%" key=clear
+) else (
+    echo FAILED: Profile was not created.
+    echo.
+    echo Trying alternative method...
+    netsh wlan add profile name="%SSID_NAME%" ssid="%SSID_NAME%"
+    netsh wlan show profiles | findstr /i "%SSID_NAME%"
+    if !errorlevel! equ 0 (
+        echo SUCCESS: Profile created with alternative method!
     ) else (
-        echo Warning: Unknown auth type. Attempting basic connection...
+        echo FAILED: All profile creation methods failed.
     )
 )
 goto :eof
@@ -53,46 +81,51 @@ REM Main loop
     set /a reconnect_seconds=!reconnect_time! * 60
     timeout /t !reconnect_seconds! /nobreak >nul
     
+    REM Check if profile exists, create if not
+    echo.
+    echo Checking if WiFi profile exists for %SSID_NAME%...
+    netsh wlan show profiles | findstr /i "%SSID_NAME%" >nul
+    if !errorlevel! equ 0 (
+        echo WiFi profile for %SSID_NAME% already exists.
+    ) else (
+        echo WiFi profile for %SSID_NAME% not found. Creating profile...
+        call :create_simple_profile
+    )
+    
+    REM Show current WiFi status
+    echo.
+    echo Current WiFi status:
+    netsh wlan show interfaces
+    
     REM Disconnect from current WiFi
+    echo.
     echo Disconnecting from current WiFi...
     netsh wlan disconnect
     
     REM Wait a moment
-    timeout /t 5 /nobreak >nul
+    timeout /t 3 /nobreak >nul
     
-    REM Check if profile exists, if not try to connect anyway
-    call :check_profile
-    
-    REM Reconnect to WiFi - try different methods
+    REM Try to connect
+    echo.
     echo Attempting to connect to %SSID_NAME%...
     
-    REM Method 1: Try connecting by profile name first
-    netsh wlan connect name="%SSID_NAME%" >nul 2>&1
-    if !errorlevel! neq 0 (
-        echo Profile connection failed, trying SSID connection...
-        REM Method 2: Try connecting by SSID
-        netsh wlan connect ssid="%SSID_NAME%" >nul 2>&1
-        if !errorlevel! neq 0 (
-            echo SSID connection failed, trying interface connection...
-            REM Method 3: Try connecting to any available network with this SSID
-            for /f "tokens=*" %%i in ('netsh wlan show profiles ^| findstr /i "%SSID_NAME%"') do (
-                set "profile_line=%%i"
-                if "!profile_line!" neq "" (
-                    echo Found profile: !profile_line!
-                    netsh wlan connect name="%SSID_NAME%"
-                )
-            )
-        )
-    )
+    REM Connect by profile name
+    netsh wlan connect name="%SSID_NAME%"
+    echo Connection command completed with return code: !errorlevel!
     
     REM Wait for connection to establish
     echo Waiting for WiFi connection to establish...
-    timeout /t 10 /nobreak >nul
+    timeout /t 15 /nobreak >nul
     
-    REM Check if connected (wait a bit more for connection to establish)
-    timeout /t 5 /nobreak >nul
+    REM Check connection status
+    echo.
+    echo Checking connection status...
+    netsh wlan show interfaces | findstr /i "state"
+    
+    REM Check if connected
     netsh wlan show interfaces | findstr /i "state.*connected" >nul
     if !errorlevel! equ 0 (
+        echo.
         echo WiFi connected successfully!
         
         REM Generate random speedtest time
@@ -104,6 +137,7 @@ REM Main loop
         timeout /t !speedtest_seconds! /nobreak >nul
         
         REM Run speedtest
+        echo.
         echo Running speedtest...
         if exist "speedtest.exe" (
             speedtest.exe
@@ -111,9 +145,14 @@ REM Main loop
             echo Error: speedtest.exe not found in current directory!
         )
     ) else (
+        echo.
         echo Warning: WiFi connection failed!
-        echo Current WiFi status:
-        netsh wlan show interfaces
+        echo.
+        echo Available profiles:
+        netsh wlan show profiles
+        echo.
+        echo Available networks:
+        netsh wlan show networks
     )
     
     echo.

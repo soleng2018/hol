@@ -15,51 +15,12 @@ check_interface() {
     return 0
 }
 
-# Function to restore netplan configuration
-restore_netplan() {
+# Function to remove interface from netplan (simple approach)
+remove_interface_from_netplan_simple() {
     local interface="$1"
     local netplan_file="$2"
     
-    echo "🔄 Restoring netplan configuration for interface: $interface"
-    
-    # Check if backup files exist
-    local backup_files=($(ls "${netplan_file}.backup."* 2>/dev/null || true))
-    
-    if [ ${#backup_files[@]} -eq 0 ]; then
-        echo "⚠️  No backup files found for $netplan_file"
-        echo "   You may need to manually remove the interface configuration"
-        return 1
-    fi
-    
-    # Get the most recent backup
-    local latest_backup=$(ls -t "${netplan_file}.backup."* 2>/dev/null | head -1)
-    
-    if [ -n "$latest_backup" ]; then
-        echo "📁 Found backup: $latest_backup"
-        
-        # Restore from backup
-        sudo cp "$latest_backup" "$netplan_file"
-        echo "✅ Restored netplan configuration from backup"
-        
-        # Apply the restored configuration
-        sudo netplan apply
-        echo "✅ Applied restored netplan configuration"
-        
-        # Remove the backup file
-        sudo rm "$latest_backup"
-        echo "🗑️  Removed backup file: $latest_backup"
-    else
-        echo "❌ No valid backup found"
-        return 1
-    fi
-}
-
-# Function to remove interface from netplan
-remove_interface_from_netplan() {
-    local interface="$1"
-    local netplan_file="$2"
-    
-    echo "🔄 Removing interface $interface from netplan configuration"
+    echo "🔄 Removing interface $interface from netplan configuration..."
     
     # Use Python to remove the interface from netplan
     sudo python3 -c "
@@ -75,18 +36,20 @@ try:
     if 'network' in config and 'ethernets' in config['network']:
         if '$interface' in config['network']['ethernets']:
             del config['network']['ethernets']['$interface']
-            print('Interface $interface removed from configuration')
+            print('✅ Interface $interface removed from configuration')
         else:
-            print('Interface $interface not found in configuration')
+            print('ℹ️  Interface $interface not found in configuration')
+    else:
+        print('ℹ️  No ethernets section found in netplan configuration')
     
     # Write the updated configuration
     with open('$netplan_file', 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
     
-    print('Configuration updated successfully')
+    print('✅ Netplan configuration updated successfully')
     
 except Exception as e:
-    print(f'Error updating netplan: {e}')
+    print(f'❌ Error updating netplan: {e}')
     sys.exit(1)
 " || {
     echo "❌ Failed to remove interface from netplan configuration"
@@ -97,6 +60,7 @@ except Exception as e:
     sudo netplan apply
     echo "✅ Applied updated netplan configuration"
 }
+
 
 # Function to stop and remove Docker containers
 cleanup_containers() {
@@ -213,6 +177,7 @@ reset_ip_forwarding() {
     fi
 }
 
+
 # Main cleanup function
 main_cleanup() {
     echo "🚀 Starting cleanup process..."
@@ -238,11 +203,8 @@ main_cleanup() {
     else
         echo "✅ Found netplan file: $NETPLAN_FILE"
         
-        # Try to restore from backup first
-        if ! restore_netplan "$interface" "$NETPLAN_FILE"; then
-            echo "⚠️  Backup restore failed, attempting to remove interface manually..."
-            remove_interface_from_netplan "$interface" "$NETPLAN_FILE"
-        fi
+        # Remove the interface from netplan
+        remove_interface_from_netplan_simple "$interface" "$NETPLAN_FILE"
     fi
     
     echo ""
@@ -270,7 +232,7 @@ main_cleanup() {
     echo "✅ Cleanup completed!"
     echo ""
     echo "📋 Summary of actions performed:"
-    echo "   • Restored/removed netplan interface configuration"
+    echo "   • Removed interface from netplan configuration"
     echo "   • Stopped and removed Docker containers (frr0, dhcpd0, radiusd0)"
     echo "   • Preserved Docker images (dhcpd, radiusd) for reuse"
     echo "   • Removed all configuration files"

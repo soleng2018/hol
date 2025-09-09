@@ -102,8 +102,7 @@ fi
 
 echo "✅ Using netplan file: $NETPLAN_FILE"
 
-# Create backup of original netplan file
-sudo cp "$NETPLAN_FILE" "${NETPLAN_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+# No backup needed - cleanup script will handle interface removal
 
 # Extract IP address and prefix from lan_ip (e.g., 172.16.0.1/30)
 IP_ADDR=$(echo "$lan_ip" | cut -d'/' -f1)
@@ -1759,3 +1758,6 @@ echo "|          NSB's Subnet: $lan_subnet                         |"
 echo "|        DHCP Server IP: $lan_ip                             |"
 echo "|      RADIUS Server IP: $lan_ip                             |"
 echo "|____________________________________________________________|"
+
+echo ""
+echo "ℹ️  Use demo_cleanup.sh to remove the interface configuration when done"

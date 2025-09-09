@@ -8,6 +8,47 @@ check_interface() {
     fi
 }
 
+# Function to check if Python3 is installed
+check_python3() {
+    if ! command -v python3 &> /dev/null; then
+        echo "❌ Python3 not found. Installing..."
+        sudo apt-get update
+        sudo apt-get install -y python3
+        if ! command -v python3 &> /dev/null; then
+            echo "❌ Failed to install Python3"
+            exit 1
+        fi
+        echo "✅ Python3 installed successfully"
+    else
+        echo "✅ Python3 is available"
+    fi
+}
+
+# Function to check if PyYAML is installed
+check_pyyaml() {
+    if ! python3 -c "import yaml" &> /dev/null; then
+        echo "❌ PyYAML not found. Installing..."
+        sudo apt-get update
+        sudo apt-get install -y python3-yaml
+        if ! python3 -c "import yaml" &> /dev/null; then
+            echo "❌ Failed to install PyYAML"
+            exit 1
+        fi
+        echo "✅ PyYAML installed successfully"
+    else
+        echo "✅ PyYAML is available"
+    fi
+}
+
+# Function to check and install dependencies
+check_dependencies() {
+    echo "Checking dependencies..."
+    check_python3
+    check_pyyaml
+    echo "✅ All dependencies are available"
+    echo "--------------------------------------------------------------"
+}
+
 # Function to run FRR container
 create_frr_container() {
     local podID=0
@@ -93,6 +134,9 @@ fi
 
 echo "✅ Found interface: $interface"
 
+# Check and install dependencies
+check_dependencies
+
 # Find the netplan configuration file
 NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -1)
 if [ -z "$NETPLAN_FILE" ]; then
@@ -147,8 +191,7 @@ except Exception as e:
     print(f'Error updating netplan: {e}')
     sys.exit(1)
 " || {
-    echo "❌ Failed to update netplan configuration. Python3 or PyYAML not available."
-    echo "   Please install: sudo apt install python3-yaml"
+    echo "❌ Failed to update netplan configuration. This should not happen after dependency check."
     exit 1
 }
 else
@@ -188,8 +231,7 @@ except Exception as e:
     print(f'Error adding to netplan: {e}')
     sys.exit(1)
 " || {
-    echo "❌ Failed to update netplan configuration. Python3 or PyYAML not available."
-    echo "   Please install: sudo apt install python3-yaml"
+    echo "❌ Failed to update netplan configuration. This should not happen after dependency check."
     exit 1
 }
 fi

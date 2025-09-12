@@ -263,8 +263,24 @@ detect_internet_interface() {
     INTERNET_IFACE=\$(ip route | awk '/^default/ {print \$5; exit}')
     
     if [ -n "\$INTERNET_IFACE" ]; then
-        echo "Internet-facing interface: \$INTERNET_IFACE" >&2
-        echo "\$INTERNET_IFACE"
+        # Check if the interface exists and is up
+        if ip link show "\$INTERNET_IFACE" &>/dev/null && ip link show "\$INTERNET_IFACE" | grep -q "state UP"; then
+            echo "Internet-facing interface: \$INTERNET_IFACE" >&2
+            echo "\$INTERNET_IFACE"
+        else
+            echo "Warning: Interface \$INTERNET_IFACE found in routing table but is not available or not up" >&2
+            echo "Attempting to find alternative internet interface..." >&2
+            
+            # Try to find an alternative interface with a default route
+            ALTERNATIVE_IFACE=\$(ip route | awk '/^default/ {print \$5}' | head -1)
+            if [ -n "\$ALTERNATIVE_IFACE" ] && ip link show "\$ALTERNATIVE_IFACE" &>/dev/null && ip link show "\$ALTERNATIVE_IFACE" | grep -q "state UP"; then
+                echo "Using alternative interface: \$ALTERNATIVE_IFACE" >&2
+                echo "\$ALTERNATIVE_IFACE"
+            else
+                echo "No available internet interface found." >&2
+                exit 1
+            fi
+        fi
     else
         echo "No default internet interface found." >&2
         exit 1

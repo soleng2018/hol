@@ -255,18 +255,70 @@ fi
 # Create setup-nat.sh dynamically
 sudo tee /usr/local/bin/setup-nat.sh > /dev/null <<EOF
 #!/bin/bash
+set -euo pipefail
 
-# Enable IP forwarding
-sysctl -w net.ipv4.ip_forward=1
+# Function to detect the internet-facing interface
+detect_internet_interface() {
+    # Get the interface used for the default route (internet access)
+    INTERNET_IFACE=\$(ip route | awk '/^default/ {print \$5; exit}')
+    
+    if [ -n "\$INTERNET_IFACE" ]; then
+        echo "Internet-facing interface: \$INTERNET_IFACE"
+        echo "\$INTERNET_IFACE"
+    else
+        echo "No default internet interface found." >&2
+        exit 1
+    fi
+}
 
-# Add iptables rules
-iptables -t nat -A POSTROUTING -o $INTERNET_IFACE -j MASQUERADE
-iptables -A FORWARD -i $interface -o $INTERNET_IFACE -j ACCEPT
-iptables -A FORWARD -i $INTERNET_IFACE -o $interface -m state --state ESTABLISHED,RELATED -j ACCEPT
+# Function to setup NAT rules
+setup_nat() {
+    local internet_iface="\$1"
+    local lan_interface="\$2"
+    
+    # Enable IP forwarding
+    sysctl -w net.ipv4.ip_forward=1
+    
+    # Add iptables rules
+    iptables -t nat -A POSTROUTING -o "\$internet_iface" -j MASQUERADE
+    iptables -A FORWARD -i "\$lan_interface" -o "\$internet_iface" -j ACCEPT
+    iptables -A FORWARD -i "\$internet_iface" -o "\$lan_interface" -m state --state ESTABLISHED,RELATED -j ACCEPT
+}
+
+# Main execution
+if [ \$# -eq 0 ]; then
+    # If no arguments provided, detect internet interface and use default lan interface
+    INTERNET_IFACE=\$(detect_internet_interface)
+    LAN_INTERFACE="eth0"  # Default LAN interface
+    setup_nat "\$INTERNET_IFACE" "\$LAN_INTERFACE"
+elif [ \$# -eq 1 ]; then
+    # If only one argument provided, use it as LAN interface and detect internet interface
+    INTERNET_IFACE=\$(detect_internet_interface)
+    LAN_INTERFACE="\$1"
+    setup_nat "\$INTERNET_IFACE" "\$LAN_INTERFACE"
+elif [ \$# -eq 2 ]; then
+    # If two arguments provided, use them as internet and LAN interfaces
+    INTERNET_IFACE="\$1"
+    LAN_INTERFACE="\$2"
+    setup_nat "\$INTERNET_IFACE" "\$LAN_INTERFACE"
+else
+    echo "Usage: \$0 [LAN_INTERFACE] [INTERNET_INTERFACE]"
+    echo "  LAN_INTERFACE: The LAN interface to configure (default: eth0)"
+    echo "  INTERNET_INTERFACE: The internet interface (default: auto-detect)"
+    echo ""
+    echo "Examples:"
+    echo "  \$0                    # Auto-detect internet interface, use eth0 as LAN"
+    echo "  \$0 eth1              # Auto-detect internet interface, use eth1 as LAN"
+    echo "  \$0 eth1 wlan0        # Use eth1 as LAN, wlan0 as internet"
+    exit 1
+fi
 EOF
 
 # Make it executable
 sudo chmod +x /usr/local/bin/setup-nat.sh
+
+# Run setup-nat.sh with the LAN interface
+/usr/local/bin/setup-nat.sh "$interface"
 
 sudo tee /etc/systemd/system/setup-nat.service > /dev/null <<EOF
 [Unit]
@@ -275,7 +327,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/setup-nat.sh
+ExecStart=/usr/local/bin/setup-nat.sh $interface
 RemainAfterExit=yes
 
 [Install]

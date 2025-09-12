@@ -263,7 +263,7 @@ detect_internet_interface() {
     INTERNET_IFACE=\$(ip route | awk '/^default/ {print \$5; exit}')
     
     if [ -n "\$INTERNET_IFACE" ]; then
-        echo "Internet-facing interface: \$INTERNET_IFACE"
+        echo "Internet-facing interface: \$INTERNET_IFACE" >&2
         echo "\$INTERNET_IFACE"
     else
         echo "No default internet interface found." >&2

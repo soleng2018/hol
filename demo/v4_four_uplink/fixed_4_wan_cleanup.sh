@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🧹 V4 Four Uplink Cleanup Script"
-echo "================================="
-echo "This script will undo all changes made by v4_four_uplink_demo.sh"
-echo "Includes cleanup for FOUR interface configuration"
+echo "🧹 Fixed 4-WAN Network Cleanup Script"
+echo "======================================"
+echo "This script will undo all changes made by fixed_4_wan_setup.sh"
+echo "Includes cleanup for fixed 4-WAN interface configuration"
 echo ""
 
 # Script directory
@@ -119,8 +119,8 @@ remove_four_interfaces_from_netplan() {
 cleanup_containers() {
     echo "🐳 Cleaning up Docker containers..."
     
-    # Stop and remove V4 specific containers
-    local containers=("frr_a" "dhcpd_a" "radiusd_a")
+    # Stop and remove Fixed 4-WAN specific containers
+    local containers=("frr_fixed4wan" "dhcpd_fixed4wan" "radiusd_fixed4wan")
     
     for container in "${containers[@]}"; do
         if docker ps -a --format "table {{.Names}}" | grep -q "^${container}$"; then
@@ -156,7 +156,7 @@ cleanup_config_files() {
     echo "📄 Cleaning up configuration files..."
     
     local config_files=(
-        "frr_a.conf"
+        "frr_fixed4wan.conf"
         "daemons"
         "dhcpdContainerfile"
         "dhcpdStartup.sh"
@@ -178,31 +178,31 @@ cleanup_config_files() {
     done
 }
 
-# Function to remove V4 specific systemd service and NAT configuration
+# Function to remove Fixed 4-WAN specific systemd service and NAT configuration
 cleanup_nat_service() {
-    echo "🔧 Cleaning up V4 NAT service and configuration..."
+    echo "🔧 Cleaning up Fixed 4-WAN NAT service and configuration..."
     
-    # Stop and disable the V4 service
-    if systemctl is-active --quiet setup-nat-v4.service 2>/dev/null; then
-        echo "🛑 Stopping setup-nat-v4.service"
-        sudo systemctl stop setup-nat-v4.service
+    # Stop and disable the Fixed 4-WAN service
+    if systemctl is-active --quiet setup-nat-fixed4wan.service 2>/dev/null; then
+        echo "🛑 Stopping setup-nat-fixed4wan.service"
+        sudo systemctl stop setup-nat-fixed4wan.service
     fi
     
-    if systemctl is-enabled --quiet setup-nat-v4.service 2>/dev/null; then
-        echo "🚫 Disabling setup-nat-v4.service"
-        sudo systemctl disable setup-nat-v4.service
+    if systemctl is-enabled --quiet setup-nat-fixed4wan.service 2>/dev/null; then
+        echo "🚫 Disabling setup-nat-fixed4wan.service"
+        sudo systemctl disable setup-nat-fixed4wan.service
     fi
     
-    # Remove the V4 service file
-    if [ -f "/etc/systemd/system/setup-nat-v4.service" ]; then
-        sudo rm -f /etc/systemd/system/setup-nat-v4.service
-        echo "🗑️  Removed: /etc/systemd/system/setup-nat-v4.service"
+    # Remove the Fixed 4-WAN service file
+    if [ -f "/etc/systemd/system/setup-nat-fixed4wan.service" ]; then
+        sudo rm -f /etc/systemd/system/setup-nat-fixed4wan.service
+        echo "🗑️  Removed: /etc/systemd/system/setup-nat-fixed4wan.service"
     fi
     
-    # Remove the V4 setup script
-    if [ -f "/usr/local/bin/setup-nat-v4.sh" ]; then
-        sudo rm -f /usr/local/bin/setup-nat-v4.sh
-        echo "🗑️  Removed: /usr/local/bin/setup-nat-v4.sh"
+    # Remove the Fixed 4-WAN setup script
+    if [ -f "/usr/local/bin/setup-nat-fixed4wan.sh" ]; then
+        sudo rm -f /usr/local/bin/setup-nat-fixed4wan.sh
+        echo "🗑️  Removed: /usr/local/bin/setup-nat-fixed4wan.sh"
     fi
     
     # Also check for and clean up older services (v2/v3) if they exist
@@ -423,14 +423,14 @@ main_cleanup() {
     cleanup_ospf_routes
     echo ""
     
-    echo "✅ FOUR interface cleanup completed!"
+    echo "✅ Fixed 4-WAN Network cleanup completed!"
     echo ""
     echo "📋 Summary of actions performed:"
-    echo "   • Removed ALL FOUR interfaces from netplan configuration"
-    echo "   • Stopped and removed Docker containers (frr_a, dhcpd_a, radiusd_a)"
+    echo "   • Removed ALL 4-WAN interfaces from netplan configuration"
+    echo "   • Stopped and removed Docker containers (frr_fixed4wan, dhcpd_fixed4wan, radiusd_fixed4wan)"
     echo "   • Preserved Docker images (dhcpd, radiusd) for reuse"
-    echo "   • Removed all V4 configuration files"
-    echo "   • Stopped and removed V4 NAT systemd service"
+    echo "   • Removed all Fixed 4-WAN configuration files"
+    echo "   • Stopped and removed Fixed 4-WAN NAT systemd service"
     echo "   • Disabled IP forwarding"
     echo "   • Cleaned up all OSPF routes from routing table"
     echo ""
@@ -463,7 +463,7 @@ display_interface_info() {
 }
 
 # Confirmation prompt
-echo "⚠️  WARNING: This will undo all changes made by v4_four_uplink_demo.sh"
+echo "⚠️  WARNING: This will undo all changes made by fixed_4_wan_setup.sh"
 echo "   This includes:"
 echo "   • Removing Docker containers"
 echo "   • Restoring network configuration for ALL FOUR interfaces"

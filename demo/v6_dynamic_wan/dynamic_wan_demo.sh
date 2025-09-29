@@ -1,19 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 V4 Four Uplink Demo Script"
-echo "============================="
-echo "This script configures 4 network uplinks using parameters from parameters.txt"
+echo "🚀 Dynamic WAN Network Setup Script"
+echo "===================================="
+echo "This script configures 1-4 network uplinks dynamically using parameters.txt"
+echo "Configure only the interfaces you need - unused ones should have empty quotes"
 echo ""
 
-# Script directory
+# Script directory and parameters file
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARAMS_FILE="$SCRIPT_DIR/parameters.txt"
+
+# Global variables for dynamic configuration
+declare -a ACTIVE_INTERFACES=()
+declare -a ACTIVE_LAN_IPS=()
+declare -a ACTIVE_LAN_SUBNETS=()
+declare -a ACTIVE_LAN_NET_ADDRS=()
+NUM_ACTIVE_UPLINKS=0
 
 # Function to check if the interface exists
 check_interface() {
     if ! ip link show "$1" &> /dev/null; then
-        echo "❌ Error: Interface $1 does not exist on the host."
+        echo "❌ ERROR: Interface $1 does not exist on the host."
+        echo "   Please check the interface name with: ip link show"
+        echo "   Available interfaces:"
+        ip link show | grep -E "^[0-9]+:" | awk -F': ' '{print "     " $2}' | sed 's/@.*$//'
         exit 1
     fi
 }
@@ -59,85 +70,88 @@ check_dependencies() {
     echo "--------------------------------------------------------------"
 }
 
-# Function to parse parameters.txt file
+# Function to parse and validate parameters.txt file
 parse_parameters() {
     echo "📄 Reading parameters from: $PARAMS_FILE"
     
     if [ ! -f "$PARAMS_FILE" ]; then
-        echo "❌ Error: Parameters file not found: $PARAMS_FILE"
+        echo "❌ ERROR: Parameters file not found: $PARAMS_FILE"
         exit 1
     fi
     
-    # Read and parse parameters using source
-    # Remove quotes when parsing
-    eval "$(grep -E '^uplink[1-4]_' "$PARAMS_FILE" | sed 's/"//g')"
+    # Read and parse parameters, removing quotes
+    eval "$(grep -E '^uplink[1-4]_' "$PARAMS_FILE" | sed 's/"//g')" 2>/dev/null
     
-    # Validate that all required parameters are set
+    # Validate and collect active uplinks
+    local active_count=0
     for i in {1..4}; do
         local interface_var="uplink${i}_interface"
         local lan_ip_var="uplink${i}_lan_ip"
         local lan_subnet_var="uplink${i}_lan_subnet"
         
-        if [ -z "${!interface_var:-}" ]; then
-            echo "❌ Error: Missing parameter: $interface_var"
-            exit 1
+        local interface="${!interface_var:-}"
+        local lan_ip="${!lan_ip_var:-}"
+        local lan_subnet="${!lan_subnet_var:-}"
+        
+        # Skip empty interfaces
+        if [ -z "$interface" ] || [ -z "$lan_ip" ] || [ -z "$lan_subnet" ]; then
+            echo "ℹ️  Uplink $i: Disabled (empty parameters)"
+            continue
         fi
         
-        if [ -z "${!lan_ip_var:-}" ]; then
-            echo "❌ Error: Missing parameter: $lan_ip_var"
-            exit 1
-        fi
+        # Validate interface exists
+        echo "🔍 Validating uplink $i interface: $interface"
+        check_interface "$interface"
+        echo "✅ Interface $interface exists"
         
-        if [ -z "${!lan_subnet_var:-}" ]; then
-            echo "❌ Error: Missing parameter: $lan_subnet_var"
-            exit 1
-        fi
+        # Add to active arrays
+        ACTIVE_INTERFACES+=("$interface")
+        ACTIVE_LAN_IPS+=("$lan_ip")
+        ACTIVE_LAN_SUBNETS+=("$lan_subnet")
+        
+        # Extract network address
+        local lan_net_addr=$(echo "$lan_subnet" | cut -d'/' -f1)
+        ACTIVE_LAN_NET_ADDRS+=("$lan_net_addr")
+        
+        active_count=$((active_count + 1))
+        echo "✅ Uplink $i: $interface -> $lan_ip (subnet: $lan_subnet)"
     done
     
-    echo "✅ Successfully parsed parameters for 4 uplinks"
+    NUM_ACTIVE_UPLINKS=$active_count
+    
+    if [ $NUM_ACTIVE_UPLINKS -eq 0 ]; then
+        echo "❌ ERROR: No active uplinks found in parameters file"
+        echo "   Please configure at least one uplink with valid interface, IP, and subnet"
+        exit 1
+    fi
+    
+    echo "✅ Successfully parsed $NUM_ACTIVE_UPLINKS active uplink(s)"
     echo "--------------------------------------------------------------"
 }
 
-# Function to display parsed configuration
+# Function to display configuration summary
 display_configuration() {
-    echo "📋 Configuration Summary:"
+    echo "📋 Dynamic WAN Configuration Summary:"
     echo ""
-    for i in {1..4}; do
-        local interface_var="uplink${i}_interface"
-        local lan_ip_var="uplink${i}_lan_ip"
-        local lan_subnet_var="uplink${i}_lan_subnet"
-        
-        echo "  🔗 UPLINK $i:"
-        echo "     Interface:   ${!interface_var}"
-        echo "     LAN IP:      ${!lan_ip_var}"
-        echo "     LAN Subnet:  ${!lan_subnet_var}"
+    echo "   Active Uplinks: $NUM_ACTIVE_UPLINKS"
+    echo ""
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        echo "  🔗 UPLINK $((i+1)):"
+        echo "     Interface:    ${ACTIVE_INTERFACES[i]}"
+        echo "     LAN IP:       ${ACTIVE_LAN_IPS[i]}"
+        echo "     LAN Subnet:   ${ACTIVE_LAN_SUBNETS[i]}"
+        echo "     Network Addr: ${ACTIVE_LAN_NET_ADDRS[i]}"
         echo ""
     done
     echo "--------------------------------------------------------------"
 }
 
-# Function to validate interfaces exist
-validate_interfaces() {
-    echo "🔍 Validating network interfaces..."
-    
-    for i in {1..4}; do
-        local interface_var="uplink${i}_interface"
-        local interface_name="${!interface_var}"
-        echo "  Checking interface: $interface_name"
-        check_interface "$interface_name"
-        echo "  ✅ Interface $interface_name exists"
-    done
-    
-    echo "✅ All interfaces validated successfully"
-    echo "--------------------------------------------------------------"
-}
-
 # Function to run FRR container
 create_frr_container() {
-    local containerName="frr_a"
+    local containerName="frr_dynamicwan"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
-    -v ./frr_a.conf:/etc/frr/frr.conf:Z \
+    -v ./frr_dynamicwan.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
 
@@ -147,7 +161,7 @@ create_frr_container() {
 
 # Function to run DHCPD container
 create_dhcpd_container() {
-    local containerName="dhcpd_a"
+    local containerName="dhcpd_dynamicwan"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      dhcpd
@@ -158,18 +172,18 @@ create_dhcpd_container() {
 
 # Function to run RADIUS container
 create_radiusd_container() {
-    local containerName="radiusd_a"
+    local containerName="radiusd_dynamicwan"
     
-    docker run -dt --name $containerName --network=host --privileged --restart=always \
+    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      radiusd
     
     echo "✅ Started container $containerName"
     echo "--------------------------------------------------------------"
 }
 
-# Function to generate FRR config file for 4 uplinks
+# Function to generate dynamic FRR config file
 generate_frr_config() {
-    local config_file="frr_a.conf"
+    local config_file="frr_dynamicwan.conf"
 
     cat <<EOF > "$config_file"
 frr version 8.4_git
@@ -179,41 +193,43 @@ log stdout
 ip forwarding
 no ipv6 forwarding
 !
-interface $uplink1_interface
- ip address $uplink1_lan_ip
+EOF
+
+    # Add interface configurations dynamically for active uplinks
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        cat <<EOF >> "$config_file"
+interface ${ACTIVE_INTERFACES[i]}
+ ip address ${ACTIVE_LAN_IPS[i]}
  ip ospf network point-to-point
 !
-interface $uplink2_interface
- ip address $uplink2_lan_ip
- ip ospf network point-to-point
-!
-interface $uplink3_interface
- ip address $uplink3_lan_ip
- ip ospf network point-to-point
-!
-interface $uplink4_interface
- ip address $uplink4_lan_ip
- ip ospf network point-to-point
-!
+EOF
+    done
+
+    # Add OSPF configuration
+    cat <<EOF >> "$config_file"
 router ospf
  ospf router-id 1.1.1.1
- network $uplink1_lan_subnet area 0
- network $uplink2_lan_subnet area 0
- network $uplink3_lan_subnet area 0
- network $uplink4_lan_subnet area 0
+EOF
+
+    # Add networks to OSPF dynamically for active uplinks
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        echo " network ${ACTIVE_LAN_SUBNETS[i]} area 0" >> "$config_file"
+    done
+
+    cat <<EOF >> "$config_file"
  default-information originate always
 !
 line vty
 !
 EOF
 
-    echo "✅ FRR config written to $config_file"
+    echo "✅ FRR config written to $config_file for $NUM_ACTIVE_UPLINKS active uplink(s)"
     echo "--------------------------------------------------------------"
 }
 
-# Function to configure netplan for all 4 interfaces
+# Function to configure netplan for all active interfaces
 configure_netplan() {
-    echo "🔧 Configuring netplan for 4 uplinks..."
+    echo "🔧 Configuring netplan for $NUM_ACTIVE_UPLINKS active uplink(s)..."
     
     # Find the netplan configuration file
     NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -1)
@@ -223,82 +239,91 @@ configure_netplan() {
     fi
 
     echo "✅ Using netplan file: $NETPLAN_FILE"
+    
+    # Create Dynamic WAN state tracking file
+    local dynamicwan_state_file="/tmp/dynamicwan_configured_interfaces.conf"
+    echo "# Dynamic WAN Network Setup - Configured Interfaces" > "$dynamicwan_state_file"
+    echo "# Generated: $(date)" >> "$dynamicwan_state_file"
+    echo "# Netplan file: $NETPLAN_FILE" >> "$dynamicwan_state_file"
+    echo "# Number of active uplinks: $NUM_ACTIVE_UPLINKS" >> "$dynamicwan_state_file"
+    echo "# Script version: dynamic-wan-v6" >> "$dynamicwan_state_file"
+    echo "" >> "$dynamicwan_state_file"
 
-    # Extract IP addresses and prefixes for all uplinks
-    local ip_addr1=$(echo "$uplink1_lan_ip" | cut -d'/' -f1)
-    local prefix1=$(echo "$uplink1_lan_ip" | cut -d'/' -f2)
-    local ip_addr2=$(echo "$uplink2_lan_ip" | cut -d'/' -f1)
-    local prefix2=$(echo "$uplink2_lan_ip" | cut -d'/' -f2)
-    local ip_addr3=$(echo "$uplink3_lan_ip" | cut -d'/' -f1)
-    local prefix3=$(echo "$uplink3_lan_ip" | cut -d'/' -f2)
-    local ip_addr4=$(echo "$uplink4_lan_ip" | cut -d'/' -f1)
-    local prefix4=$(echo "$uplink4_lan_ip" | cut -d'/' -f2)
+    # Build Python script dynamically for netplan configuration
+    local python_script=""
+    python_script+="import yaml\n"
+    python_script+="import sys\n\n"
+    python_script+="try:\n"
+    python_script+="    # Read the existing netplan file\n"
+    python_script+="    with open('$NETPLAN_FILE', 'r') as f:\n"
+    python_script+="        config = yaml.safe_load(f)\n"
+    python_script+="    \n"
+    python_script+="    # Ensure network section exists\n"
+    python_script+="    if 'network' not in config:\n"
+    python_script+="        config['network'] = {}\n"
+    python_script+="    \n"
+    python_script+="    # Add/update the interface configurations\n"
+    python_script+="    if 'ethernets' not in config['network']:\n"
+    python_script+="        config['network']['ethernets'] = {}\n"
+    python_script+="    \n"
     
-    # Update netplan configuration for all 4 interfaces
-    sudo python3 -c "
-import yaml
-import sys
+    # Add each active interface configuration and record in state file
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        local ip_addr=$(echo "${ACTIVE_LAN_IPS[i]}" | cut -d'/' -f1)
+        local prefix=$(echo "${ACTIVE_LAN_IPS[i]}" | cut -d'/' -f2)
+        
+        # Record this interface in our state file
+        echo "interface=${ACTIVE_INTERFACES[i]}" >> "$dynamicwan_state_file"
+        echo "lan_ip=${ACTIVE_LAN_IPS[i]}" >> "$dynamicwan_state_file"
+        echo "lan_subnet=${ACTIVE_LAN_SUBNETS[i]}" >> "$dynamicwan_state_file"
+        echo "" >> "$dynamicwan_state_file"
+        
+        python_script+="    # Configure ${ACTIVE_INTERFACES[i]} (Dynamic WAN)\n"
+        python_script+="    config['network']['ethernets']['${ACTIVE_INTERFACES[i]}'] = {\n"
+        python_script+="        'dhcp4': False,\n"
+        python_script+="        'addresses': ['$ip_addr/$prefix']\n"
+        python_script+="    }\n"
+        python_script+="    \n"
+    done
+    
+    python_script+="    # Write the updated configuration\n"
+    python_script+="    with open('$NETPLAN_FILE', 'w') as f:\n"
+    python_script+="        yaml.dump(config, f, default_flow_style=False, sort_keys=False)\n"
+    python_script+="    \n"
+    python_script+="    print('✅ Netplan configuration updated successfully')\n"
+    python_script+="    \n"
+    python_script+="except Exception as e:\n"
+    python_script+="    print(f'❌ Error updating netplan: {e}')\n"
+    python_script+="    sys.exit(1)\n"
 
-try:
-    # Read the existing netplan file
-    with open('$NETPLAN_FILE', 'r') as f:
-        config = yaml.safe_load(f)
-    
-    # Ensure network section exists
-    if 'network' not in config:
-        config['network'] = {}
-    
-    # Add/update the interface configurations
-    if 'ethernets' not in config['network']:
-        config['network']['ethernets'] = {}
-    
-    # Configure all 4 uplinks
-    config['network']['ethernets']['$uplink1_interface'] = {
-        'dhcp4': False,
-        'addresses': ['$ip_addr1/$prefix1']
+    # Execute the Python script
+    echo -e "$python_script" | sudo python3 || {
+        echo "❌ Failed to update netplan configuration"
+        exit 1
     }
-    
-    config['network']['ethernets']['$uplink2_interface'] = {
-        'dhcp4': False,
-        'addresses': ['$ip_addr2/$prefix2']
-    }
-    
-    config['network']['ethernets']['$uplink3_interface'] = {
-        'dhcp4': False,
-        'addresses': ['$ip_addr3/$prefix3']
-    }
-    
-    config['network']['ethernets']['$uplink4_interface'] = {
-        'dhcp4': False,
-        'addresses': ['$ip_addr4/$prefix4']
-    }
-    
-    # Write the updated configuration
-    with open('$NETPLAN_FILE', 'w') as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-    
-    print('✅ Netplan configuration updated successfully')
-    
-except Exception as e:
-    print(f'❌ Error updating netplan: {e}')
-    sys.exit(1)
-" || {
-    echo "❌ Failed to update netplan configuration"
-    exit 1
-}
 
     # Apply the netplan configuration
     sudo netplan apply
     
-    echo "✅ All 4 uplinks configured with static IPs"
-    for i in {1..4}; do
-        local interface_var="uplink${i}_interface"
-        local lan_ip_var="uplink${i}_lan_ip"
-        echo "   ${!interface_var}: ${!lan_ip_var}"
+    echo "✅ All $NUM_ACTIVE_UPLINKS active uplink(s) configured with static IPs"
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        echo "   ${ACTIVE_INTERFACES[i]}: ${ACTIVE_LAN_IPS[i]}"
     done
     
     # Wait for network to stabilize
     sleep 2
+    
+    # Make state file persistent and secure it
+    sudo mv "$dynamicwan_state_file" "/etc/dynamicwan_configured_interfaces.conf"
+    sudo chown root:root "/etc/dynamicwan_configured_interfaces.conf"
+    sudo chmod 644 "/etc/dynamicwan_configured_interfaces.conf"
+    
+    echo "✅ Dynamic WAN state tracking file created: /etc/dynamicwan_configured_interfaces.conf"
+    echo "   This file tracks interfaces configured by Dynamic WAN for safe cleanup"
+    
+    # Export Dynamic WAN state file path for use by setup_nat function
+    export DYNAMIC_WAN_STATE_FILE="/etc/dynamicwan_configured_interfaces.conf"
+    
     echo "--------------------------------------------------------------"
 }
 
@@ -318,6 +343,13 @@ setup_nat() {
     
     if [ -n "$INTERNET_IFACE" ]; then
         echo "✅ Internet-facing interface: $INTERNET_IFACE"
+        
+        # Record internet interface in state file for cleanup tracking
+        if [ -n "$DYNAMIC_WAN_STATE_FILE" ]; then
+            echo "# Internet interface used for NAT" >> "$DYNAMIC_WAN_STATE_FILE"
+            echo "internet_interface=$INTERNET_IFACE" >> "$DYNAMIC_WAN_STATE_FILE"
+            echo "" >> "$DYNAMIC_WAN_STATE_FILE"
+        fi
     else
         echo "❌ No default internet interface found."
         echo "   Please ensure you have internet connectivity before running this script."
@@ -325,7 +357,7 @@ setup_nat() {
     fi
     
     # Create setup-nat.sh dynamically
-    sudo tee /usr/local/bin/setup-nat-v4.sh > /dev/null <<EOF
+    sudo tee /usr/local/bin/setup-nat-dynamicwan.sh > /dev/null <<EOF
 #!/bin/bash
 set -euo pipefail
 
@@ -366,21 +398,39 @@ setup_nat "\$INTERNET_IFACE"
 EOF
     
     # Make it executable
-    sudo chmod +x /usr/local/bin/setup-nat-v4.sh
+    sudo chmod +x /usr/local/bin/setup-nat-dynamicwan.sh
     
-    # Run setup-nat-v4.sh
+    # Enable IP forwarding persistently in sysctl.conf
+    echo "🔧 Configuring persistent IP forwarding..."
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+        # Create backup before modifying
+        sudo cp /etc/sysctl.conf /etc/sysctl.conf.dynamicwan_backup.$(date +%Y%m%d_%H%M%S)
+        echo "   💾 Created backup: /etc/sysctl.conf.dynamicwan_backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # Add IP forwarding setting
+        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf > /dev/null
+        echo "   ✅ Added net.ipv4.ip_forward=1 to /etc/sysctl.conf"
+        
+        # Apply the setting immediately
+        sudo sysctl -p /etc/sysctl.conf > /dev/null
+        echo "   ✅ Applied sysctl configuration"
+    else
+        echo "   ℹ️  IP forwarding already enabled in sysctl.conf"
+    fi
+    
+    # Run setup-nat-dynamicwan.sh
     echo "🔧 Setting up NAT with internet interface: $INTERNET_IFACE"
-    /usr/local/bin/setup-nat-v4.sh
+    /usr/local/bin/setup-nat-dynamicwan.sh
     
     echo "🔧 Creating NAT systemd service..."
-    sudo tee /etc/systemd/system/setup-nat-v4.service > /dev/null <<EOF
+    sudo tee /etc/systemd/system/setup-nat-dynamicwan.service > /dev/null <<EOF
 [Unit]
-Description=V4 Four Uplink NAT and IP Forwarding Rules
+Description=Dynamic WAN Network NAT and IP Forwarding Rules
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/setup-nat-v4.sh
+ExecStart=/usr/local/bin/setup-nat-dynamicwan.sh
 RemainAfterExit=yes
 
 [Install]
@@ -389,8 +439,8 @@ EOF
     
     # Reload systemd and enable/start the service
     sudo systemctl daemon-reload
-    sudo systemctl enable setup-nat-v4.service
-    sudo systemctl start setup-nat-v4.service
+    sudo systemctl enable setup-nat-dynamicwan.service
+    sudo systemctl start setup-nat-dynamicwan.service
     echo "✅ NAT service created and started"
     echo "--------------------------------------------------------------"
 }
@@ -456,15 +506,9 @@ EOF
     echo "--------------------------------------------------------------"
 }
 
-# Function to create DHCP configuration for 4 subnets
+# Function to create DHCP configuration for dynamic subnets
 create_dhcp_config() {
-    echo "🔧 Creating DHCP configuration for 4 uplinks..."
-    
-    # Extract network addresses
-    local lan_net_addr1=$(echo "$uplink1_lan_subnet" | cut -d'/' -f1)
-    local lan_net_addr2=$(echo "$uplink2_lan_subnet" | cut -d'/' -f1)
-    local lan_net_addr3=$(echo "$uplink3_lan_subnet" | cut -d'/' -f1)
-    local lan_net_addr4=$(echo "$uplink4_lan_subnet" | cut -d'/' -f1)
+    echo "🔧 Creating DHCP configuration for $NUM_ACTIVE_UPLINKS active uplink(s)..."
     
     # Create DHCP Containerfile
     cat <<EOF > dhcpdContainerfile
@@ -487,17 +531,17 @@ EOF
 
     echo "✅ Created dhcpdContainerfile"
     
-    # Create DHCP Startup script
+    # Create DHCP Startup script using first active interface
     cat <<EOF > dhcpdStartup.sh
 #!/bin/bash
 set -e
 
-echo "\$(date): Starting V4 Four Uplink DHCP service startup script" >> /var/log/startup.log
-echo "\$(date): Starting V4 Four Uplink DHCP service startup script"
+echo "\$(date): Starting Dynamic WAN DHCP service startup script" >> /var/log/startup.log
+echo "\$(date): Starting Dynamic WAN DHCP service startup script"
 
-# Start the DHCP server on first interface (can be modified as needed)
+# Start the DHCP server on first active interface
 echo "\$(date): Executing dhcpd command" >> /var/log/startup.log
-/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf -pf /var/run/dhcpd.pid $uplink1_interface
+/usr/sbin/dhcpd -cf /etc/dhcp/dhcpd.conf -pf /var/run/dhcpd.pid ${ACTIVE_INTERFACES[0]}
 
 echo "\$(date): DHCP server started, keeping container alive" >> /var/log/startup.log
 
@@ -507,15 +551,15 @@ EOF
 
     echo "✅ Created dhcpdStartup.sh"
     
-    # Create dhcpd.conf with 4 subnets
+    # Create dhcpd.conf with dynamic subnets
     cat <<EOF > dhcpd.conf
-# dhcpd.conf for V4 Four Uplink Configuration
+# dhcpd.conf for Dynamic WAN Network Configuration ($NUM_ACTIVE_UPLINKS active uplinks)
 #
 # Sample configuration file for ISC dhcpd
 #
 
 # option definitions common to all supported networks...
-option domain-name "v4fourlink.local";
+option domain-name "dynamicwan.local";
 option domain-name-servers 8.8.8.8, 8.8.4.4;
 
 default-lease-time 600;
@@ -529,27 +573,23 @@ ddns-update-style none;
 # network, the authoritative directive should be uncommented.
 authoritative;
 
-# Uplink 1 subnet declaration
-subnet $lan_net_addr1 netmask 255.255.255.252 {
-}
+EOF
 
-# Uplink 2 subnet declaration  
-subnet $lan_net_addr2 netmask 255.255.255.252 {
-}
+    # Add subnet declarations dynamically for active uplinks
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        echo "# Active uplink $((i+1)) subnet declaration" >> dhcpd.conf
+        echo "subnet ${ACTIVE_LAN_NET_ADDRS[i]} netmask 255.255.255.252 {" >> dhcpd.conf
+        echo "}" >> dhcpd.conf
+        echo "" >> dhcpd.conf
+    done
 
-# Uplink 3 subnet declaration
-subnet $lan_net_addr3 netmask 255.255.255.252 {
-}
-
-# Uplink 4 subnet declaration
-subnet $lan_net_addr4 netmask 255.255.255.252 {
-}
-
+    # Add example client subnets
+    cat <<EOF >> dhcpd.conf
 # Example client subnets (can be modified as needed)
 subnet 192.168.18.0 netmask 255.255.255.0 {
   range 192.168.18.11 192.168.18.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v4fourlink.local";
+  option domain-name "dynamicwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.18.1;
   option broadcast-address 192.168.18.255;
@@ -560,7 +600,7 @@ subnet 192.168.18.0 netmask 255.255.255.0 {
 subnet 192.168.19.0 netmask 255.255.255.0 {
   range 192.168.19.11 192.168.19.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v4fourlink.local";
+  option domain-name "dynamicwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.19.1;
   option broadcast-address 192.168.19.255;
@@ -571,7 +611,7 @@ subnet 192.168.19.0 netmask 255.255.255.0 {
 subnet 192.168.20.0 netmask 255.255.255.0 {
   range 192.168.20.11 192.168.20.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v4fourlink.local";
+  option domain-name "dynamicwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.20.1;
   option broadcast-address 192.168.20.255;
@@ -582,7 +622,7 @@ subnet 192.168.20.0 netmask 255.255.255.0 {
 subnet 192.168.21.0 netmask 255.255.255.0 {
   range 192.168.21.11 192.168.21.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v4fourlink.local";
+  option domain-name "dynamicwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.21.1;
   option broadcast-address 192.168.21.255;
@@ -592,7 +632,7 @@ subnet 192.168.21.0 netmask 255.255.255.0 {
 
 EOF
 
-    echo "✅ Created dhcpd.conf with 4 uplink subnets"
+    echo "✅ Created dhcpd.conf with $NUM_ACTIVE_UPLINKS active uplink subnet(s)"
     echo "--------------------------------------------------------------"
 }
 
@@ -608,31 +648,22 @@ client local1 {
  secret = nile123
 }
 
-# Allow connections from all uplink subnets
-client uplink1 {
- ipaddr = $uplink1_lan_subnet
+EOF
+
+    # Add dynamic uplink clients for active interfaces
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        cat <<EOF >> clients.conf
+# Allow connections from active uplink $((i+1)) subnet
+client activeuplink$((i+1)) {
+ ipaddr = ${ACTIVE_LAN_SUBNETS[i]}
  proto = *
  secret = nile123
 }
 
-client uplink2 {
- ipaddr = $uplink2_lan_subnet
- proto = *
- secret = nile123
-}
+EOF
+    done
 
-client uplink3 {
- ipaddr = $uplink3_lan_subnet  
- proto = *
- secret = nile123
-}
-
-client uplink4 {
- ipaddr = $uplink4_lan_subnet
- proto = *
- secret = nile123
-}
-
+    cat <<EOF >> clients.conf
 client hol1 {
  ipaddr = 172.16.0.0/16
  proto = *
@@ -654,7 +685,7 @@ EOF
 
     echo "✅ Created clients.conf"
     
-    # Create other RADIUS files (reusing from v2_demo)
+    # Create other RADIUS files (reusing from multi_wan)
     cat <<EOF > dictionary.nile
 VENDOR          Nile            58313
 
@@ -701,7 +732,7 @@ create_docker_images() {
     docker build -t dhcpd -f dhcpdContainerfile .
     echo "✅ DHCP Image created"
     
-    # Create RADIUS Containerfile (reusing from v2_demo but updated)
+    # Create RADIUS Containerfile
     cat <<EOF > radiusdContainerfile
 FROM docker.io/freeradius/freeradius-server:latest
 RUN apt-get update && apt-get install -y iproute2 freeradius-utils
@@ -719,49 +750,46 @@ EOF
 
 # Function to display final summary
 display_summary() {
-    echo "✅ V4 Four Uplink Setup Complete!"
+    echo "✅ Dynamic WAN Network Setup Complete!"
     echo ""
     echo "==============================================================="
     echo "                    CONFIGURATION SUMMARY"
     echo "==============================================================="
     
-    for i in {1..4}; do
-        local interface_var="uplink${i}_interface"
-        local lan_ip_var="uplink${i}_lan_ip"
-        local lan_subnet_var="uplink${i}_lan_subnet"
-        
-        echo "| UPLINK $i (${!interface_var}):"
-        echo "|   Interface IP:     ${!lan_ip_var}"
-        echo "|   Network Subnet:   ${!lan_subnet_var}"
-        echo "|   DHCP Server IP:   ${!lan_ip_var}"
-        echo "|   RADIUS Server IP: ${!lan_ip_var}"
+    for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
+        echo "| ACTIVE UPLINK $((i+1)) (${ACTIVE_INTERFACES[i]}):"
+        echo "|   Interface IP:     ${ACTIVE_LAN_IPS[i]}"
+        echo "|   Network Subnet:   ${ACTIVE_LAN_SUBNETS[i]}"
+        echo "|   DHCP Server IP:   ${ACTIVE_LAN_IPS[i]}"
+        echo "|   RADIUS Server IP: ${ACTIVE_LAN_IPS[i]}"
         echo "|____________________________________________________________"
     done
     
     echo ""
     echo "🐳 Docker Containers Started:"
-    echo "   • frr_a (FRR Routing)"
-    echo "   • dhcpd_a (DHCP Server)"
-    echo "   • radiusd_a (RADIUS Server)"
+    echo "   • frr_dynamicwan (FRR Routing - $NUM_ACTIVE_UPLINKS interfaces)"
+    echo "   • dhcpd_dynamicwan (DHCP Server)"
+    echo "   • radiusd_dynamicwan (RADIUS Server)"
     echo ""
     echo "🔧 Services Configured:"
     echo "   • NAT and IP Forwarding enabled"
-    echo "   • OSPF routing for all 4 uplinks"
+    echo "   • OSPF routing for all $NUM_ACTIVE_UPLINKS active uplinks"
     echo "   • Static IP addresses assigned"
     echo ""
-    echo "ℹ️  Use v4_four_uplink_cleanup.sh to remove all configuration when done"
+    echo "ℹ️  Use dynamic_wan_cleanup.sh to remove all configuration when done"
 }
 
 # ===============================================================
 #                         MAIN EXECUTION
 # ===============================================================
 
-echo "🔍 Starting V4 Four Uplink configuration process..."
+echo "🔍 Starting Dynamic WAN Network configuration process..."
+echo ""
 
-# Parse parameters from file
+# Parse parameters and determine active uplinks
 parse_parameters
 
-# Display configuration
+# Display configuration summary
 display_configuration
 
 # Ask for confirmation
@@ -780,10 +808,6 @@ echo "🚀 Starting configuration..."
 
 # Check dependencies
 check_dependencies
-
-# Validate interfaces
-validate_interfaces
-
 
 # Configure netplan
 configure_netplan
@@ -813,4 +837,11 @@ create_radiusd_container
 # Display final summary
 display_summary
 
-echo "🎉 V4 Four Uplink Demo setup completed successfully!"
+echo "🎉 Dynamic WAN Network setup completed successfully!"
+echo ""
+echo "📋 Configuration Details:"
+echo "   • Parameter file: $PARAMS_FILE"
+echo "   • Active uplinks: $NUM_ACTIVE_UPLINKS"
+echo "   • State file: /etc/dynamicwan_configured_interfaces.conf"
+echo "   • Domain: dynamicwan.local"
+

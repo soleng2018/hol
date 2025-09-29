@@ -1,0 +1,15 @@
+FROM ubuntu:latest
+
+# Install necessary tools
+RUN apt-get update && apt-get install -y iproute2 isc-dhcp-server freeradius-utils
+
+# Create a DHCPD startup script
+COPY dhcpdStartup.sh /usr/local/bin/startup.sh
+RUN chmod +x /usr/local/bin/startup.sh
+
+# Copy the DHCP server configuration
+COPY ./dhcpd.conf /etc/dhcp/dhcpd.conf
+RUN touch /var/lib/dhcp/dhcpd.leases
+
+# Command to execute the startup script
+CMD ["/usr/local/bin/startup.sh"]

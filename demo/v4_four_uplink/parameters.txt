@@ -1,0 +1,81 @@
+################################################################################
+#                           FOUR UPLINK CONFIGURATION                           #
+################################################################################
+#
+# This file contains network configuration for 4 uplink interfaces.
+# Each uplink requires:
+#   - Interface name (e.g., "eth0", "eno1np0", etc.) - MUST be in double quotes
+#   - IP address to assign to the interface (with /30 subnet mask)
+#   - Network subnet for OSPF routing (network portion of the IP)
+#
+# IMPORTANT NOTES:
+#   - Use /30 subnets (provides 2 usable IPs for point-to-point connections)
+#   - IP address should be the first usable IP in the subnet
+#   - Network subnet should be the network address (ending in .0 for /30)
+#   - Make sure interface names match your actual network interfaces
+#   - ALWAYS put interface names in double quotes to prevent parsing errors
+#
+################################################################################
+
+# ============================================================================
+#                                UPLINK 1
+# ============================================================================
+uplink1_interface="enp3s0"
+uplink1_lan_ip="172.16.0.1/30"
+uplink1_lan_subnet="172.16.0.0/30"
+
+# ============================================================================
+#                                UPLINK 2  
+# ============================================================================
+uplink2_interface="enp4s0"
+uplink2_lan_ip="172.16.1.1/30"
+uplink2_lan_subnet="172.16.1.0/30"
+
+# ============================================================================
+#                                UPLINK 3
+# ============================================================================
+uplink3_interface="enp5ss0"
+uplink3_lan_ip="172.16.2.1/30"
+uplink3_lan_subnet="172.16.2.0/30"
+
+# ============================================================================
+#                                UPLINK 4
+# ============================================================================
+uplink4_interface="enp6s0"
+uplink4_lan_ip="172.16.3.1/30"
+uplink4_lan_subnet="172.16.3.0/30"
+
+################################################################################
+#                              CONFIGURATION EXAMPLES
+################################################################################
+#
+# Example 1: Standard Ethernet interfaces
+#   uplink1_interface="eth0"
+#   uplink1_lan_ip="192.168.1.1/30"
+#   uplink1_lan_subnet="192.168.1.0/30"
+#
+# Example 2: Enterprise network interfaces  
+#   uplink1_interface="eno2np1"
+#   uplink1_lan_ip="10.0.0.1/30"
+#   uplink1_lan_subnet="10.0.0.0/30"
+#
+# Example 3: /30 Subnet breakdown (provides 2 usable IPs):
+#   Network: 172.16.0.0/30
+#   Usable IPs: 172.16.0.1 and 172.16.0.2
+#   Assign 172.16.0.1/30 to the interface
+#   Use 172.16.0.0/30 as the network subnet for routing
+#
+################################################################################
+#                          COMMON MISTAKES TO AVOID
+################################################################################
+#
+# ❌ WRONG: uplink1_interface=eth 0    (space in interface name)
+# ❌ WRONG: uplink1_interface=eth0.1   (dot without quotes)
+# ❌ WRONG: uplink1_interface='eth0'   (single quotes instead of double)
+# ❌ WRONG: uplink1_interface=eth0     (no quotes at all)
+#
+# ✅ CORRECT: uplink1_interface="eth0"
+# ✅ CORRECT: uplink1_interface="eth0.1"  
+# ✅ CORRECT: uplink1_interface="eno2np1"
+#
+################################################################################

@@ -1,0 +1,14 @@
+bob     Cleartext-Password := "hello"
+        Reply-Message := "Hello, %{User-Name}"
+#
+#
+employee      Cleartext-Password := "nilesecure"
+              netseg = "Employee"
+#
+contractor    Cleartext-Password := "nilesecure"
+              netseg = "contractor"
+sally@nilenetworks.com      Cleartext-Password := "nilesecure"
+              netseg = "corporate"
+harry-ext@nilenetworks.com      Cleartext-Password := "nilesecure"
+              netseg = "contractor"
+

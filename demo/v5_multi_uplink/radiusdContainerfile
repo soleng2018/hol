@@ -1,6 +1,0 @@
-FROM docker.io/freeradius/freeradius-server:latest
-RUN apt-get update && apt-get install -y iproute2 freeradius-utils
-COPY ./clients.conf /etc/raddb/clients.conf
-COPY ./authorize /etc/raddb/mods-config/files/authorize
-COPY ./dictionary.nile /usr/share/freeradius/dictionary.nile
-RUN cd /etc/raddb/certs && rm *.pem *.key *.crt *.p12 *.txt *.crl *.der *.old *.csr *.mk && ./bootstrap

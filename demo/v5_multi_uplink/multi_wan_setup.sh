@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 V5 Multi-Uplink Demo Script"
-echo "==============================="
+echo "🚀 Multi-WAN Network Setup Script"
+echo "=================================="
 echo "This script configures multiple network uplinks (1, 2, or 4 interfaces)"
 echo ""
 
@@ -169,10 +169,10 @@ display_configuration() {
 
 # Function to run FRR container
 create_frr_container() {
-    local containerName="frr_v5"
+    local containerName="frr_multi"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
-    -v ./frr_v5.conf:/etc/frr/frr.conf:Z \
+    -v ./frr_multi.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
 
@@ -182,7 +182,7 @@ create_frr_container() {
 
 # Function to run DHCPD container
 create_dhcpd_container() {
-    local containerName="dhcpd_v5"
+    local containerName="dhcpd_multi"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      dhcpd
@@ -193,7 +193,7 @@ create_dhcpd_container() {
 
 # Function to run RADIUS container
 create_radiusd_container() {
-    local containerName="radiusd_v5"
+    local containerName="radiusd_multi"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      radiusd
@@ -204,7 +204,7 @@ create_radiusd_container() {
 
 # Function to generate dynamic FRR config file
 generate_frr_config() {
-    local config_file="frr_v5.conf"
+    local config_file="frr_multi.conf"
 
     cat <<EOF > "$config_file"
 frr version 8.4_git
@@ -261,13 +261,14 @@ configure_netplan() {
 
     echo "✅ Using netplan file: $NETPLAN_FILE"
     
-    # Create V5 state tracking file to record what we configure
-    local v5_state_file="/tmp/v5_configured_interfaces.conf"
-    echo "# V5 Multi-Uplink Demo - Configured Interfaces" > "$v5_state_file"
-    echo "# Generated: $(date)" >> "$v5_state_file"
-    echo "# Netplan file: $NETPLAN_FILE" >> "$v5_state_file"
-    echo "# Number of uplinks: $NUM_UPLINKS" >> "$v5_state_file"
-    echo "" >> "$v5_state_file"
+    # Create Multi-WAN state tracking file to record what we configure
+    local multi_wan_state_file="/tmp/multi_wan_configured_interfaces.conf"
+    echo "# Multi-WAN Network Setup - Configured Interfaces" > "$multi_wan_state_file"
+    echo "# Generated: $(date)" >> "$multi_wan_state_file"
+    echo "# Netplan file: $NETPLAN_FILE" >> "$multi_wan_state_file"
+    echo "# Number of uplinks: $NUM_UPLINKS" >> "$multi_wan_state_file"
+    echo "# Script version: multi-wan" >> "$multi_wan_state_file"
+    echo "" >> "$multi_wan_state_file"
 
     # Build Python script dynamically for netplan configuration
     local python_script=""
@@ -293,12 +294,12 @@ configure_netplan() {
         local prefix=$(echo "${LAN_IPS[i]}" | cut -d'/' -f2)
         
         # Record this interface in our state file
-        echo "interface=${INTERFACES[i]}" >> "$v5_state_file"
-        echo "lan_ip=${LAN_IPS[i]}" >> "$v5_state_file"
-        echo "lan_subnet=${LAN_SUBNETS[i]}" >> "$v5_state_file"
-        echo "" >> "$v5_state_file"
+        echo "interface=${INTERFACES[i]}" >> "$multi_wan_state_file"
+        echo "lan_ip=${LAN_IPS[i]}" >> "$multi_wan_state_file"
+        echo "lan_subnet=${LAN_SUBNETS[i]}" >> "$multi_wan_state_file"
+        echo "" >> "$multi_wan_state_file"
         
-        python_script+="    # Configure ${INTERFACES[i]} (V5 Multi-Uplink)\n"
+        python_script+="    # Configure ${INTERFACES[i]} (Multi-WAN)\n"
         python_script+="    config['network']['ethernets']['${INTERFACES[i]}'] = {\n"
         python_script+="        'dhcp4': False,\n"
         python_script+="        'addresses': ['$ip_addr/$prefix']\n"
@@ -334,12 +335,16 @@ configure_netplan() {
     sleep 2
     
     # Make state file persistent and secure it
-    sudo mv "$v5_state_file" "/etc/v5_configured_interfaces.conf"
-    sudo chown root:root "/etc/v5_configured_interfaces.conf"
-    sudo chmod 644 "/etc/v5_configured_interfaces.conf"
+    sudo mv "$multi_wan_state_file" "/etc/multi_wan_configured_interfaces.conf"
+    sudo chown root:root "/etc/multi_wan_configured_interfaces.conf"
+    sudo chmod 644 "/etc/multi_wan_configured_interfaces.conf"
     
-    echo "✅ V5 state tracking file created: /etc/v5_configured_interfaces.conf"
-    echo "   This file tracks interfaces configured by V5 for safe cleanup"
+    echo "✅ Multi-WAN state tracking file created: /etc/multi_wan_configured_interfaces.conf"
+    echo "   This file tracks interfaces configured by Multi-WAN for safe cleanup"
+    
+    # Export Multi-WAN state file path for use by setup_nat function
+    export MULTI_WAN_STATE_FILE="/etc/multi_wan_configured_interfaces.conf"
+    
     echo "--------------------------------------------------------------"
 }
 
@@ -359,6 +364,13 @@ setup_nat() {
     
     if [ -n "$INTERNET_IFACE" ]; then
         echo "✅ Internet-facing interface: $INTERNET_IFACE"
+        
+        # Record internet interface in state file for cleanup tracking
+        if [ -n "$MULTI_WAN_STATE_FILE" ]; then
+            echo "# Internet interface used for NAT" >> "$MULTI_WAN_STATE_FILE"
+            echo "internet_interface=$INTERNET_IFACE" >> "$MULTI_WAN_STATE_FILE"
+            echo "" >> "$MULTI_WAN_STATE_FILE"
+        fi
     else
         echo "❌ No default internet interface found."
         echo "   Please ensure you have internet connectivity before running this script."
@@ -366,7 +378,7 @@ setup_nat() {
     fi
     
     # Create setup-nat.sh dynamically
-    sudo tee /usr/local/bin/setup-nat-v5.sh > /dev/null <<EOF
+    sudo tee /usr/local/bin/setup-nat-multi.sh > /dev/null <<EOF
 #!/bin/bash
 set -euo pipefail
 
@@ -407,21 +419,39 @@ setup_nat "\$INTERNET_IFACE"
 EOF
     
     # Make it executable
-    sudo chmod +x /usr/local/bin/setup-nat-v5.sh
+    sudo chmod +x /usr/local/bin/setup-nat-multi.sh
     
-    # Run setup-nat-v5.sh
+    # Enable IP forwarding persistently in sysctl.conf
+    echo "🔧 Configuring persistent IP forwarding..."
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
+        # Create backup before modifying
+        sudo cp /etc/sysctl.conf /etc/sysctl.conf.multiwan_backup.$(date +%Y%m%d_%H%M%S)
+        echo "   💾 Created backup: /etc/sysctl.conf.multiwan_backup.$(date +%Y%m%d_%H%M%S)"
+        
+        # Add IP forwarding setting
+        echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf > /dev/null
+        echo "   ✅ Added net.ipv4.ip_forward=1 to /etc/sysctl.conf"
+        
+        # Apply the setting immediately
+        sudo sysctl -p /etc/sysctl.conf > /dev/null
+        echo "   ✅ Applied sysctl configuration"
+    else
+        echo "   ℹ️  IP forwarding already enabled in sysctl.conf"
+    fi
+    
+    # Run setup-nat-multi.sh
     echo "🔧 Setting up NAT with internet interface: $INTERNET_IFACE"
-    /usr/local/bin/setup-nat-v5.sh
+    /usr/local/bin/setup-nat-multi.sh
     
     echo "🔧 Creating NAT systemd service..."
-    sudo tee /etc/systemd/system/setup-nat-v5.service > /dev/null <<EOF
+    sudo tee /etc/systemd/system/setup-nat-multi.service > /dev/null <<EOF
 [Unit]
-Description=V5 Multi Uplink NAT and IP Forwarding Rules
+Description=Multi-WAN Network NAT and IP Forwarding Rules
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/setup-nat-v5.sh
+ExecStart=/usr/local/bin/setup-nat-multi.sh
 RemainAfterExit=yes
 
 [Install]
@@ -430,8 +460,8 @@ EOF
     
     # Reload systemd and enable/start the service
     sudo systemctl daemon-reload
-    sudo systemctl enable setup-nat-v5.service
-    sudo systemctl start setup-nat-v5.service
+    sudo systemctl enable setup-nat-multi.service
+    sudo systemctl start setup-nat-multi.service
     echo "✅ NAT service created and started"
     echo "--------------------------------------------------------------"
 }
@@ -527,8 +557,8 @@ EOF
 #!/bin/bash
 set -e
 
-echo "\$(date): Starting V5 Multi Uplink DHCP service startup script" >> /var/log/startup.log
-echo "\$(date): Starting V5 Multi Uplink DHCP service startup script"
+echo "\$(date): Starting Multi-WAN DHCP service startup script" >> /var/log/startup.log
+echo "\$(date): Starting Multi-WAN DHCP service startup script"
 
 # Start the DHCP server on first interface
 echo "\$(date): Executing dhcpd command" >> /var/log/startup.log
@@ -544,13 +574,13 @@ EOF
     
     # Create dhcpd.conf with dynamic subnets
     cat <<EOF > dhcpd.conf
-# dhcpd.conf for V5 Multi Uplink Configuration ($NUM_UPLINKS uplinks)
+# dhcpd.conf for Multi-WAN Network Configuration ($NUM_UPLINKS uplinks)
 #
 # Sample configuration file for ISC dhcpd
 #
 
 # option definitions common to all supported networks...
-option domain-name "v5multilink.local";
+option domain-name "multiwan.local";
 option domain-name-servers 8.8.8.8, 8.8.4.4;
 
 default-lease-time 600;
@@ -580,7 +610,7 @@ EOF
 subnet 192.168.18.0 netmask 255.255.255.0 {
   range 192.168.18.11 192.168.18.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v5multilink.local";
+  option domain-name "multiwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.18.1;
   option broadcast-address 192.168.18.255;
@@ -591,7 +621,7 @@ subnet 192.168.18.0 netmask 255.255.255.0 {
 subnet 192.168.19.0 netmask 255.255.255.0 {
   range 192.168.19.11 192.168.19.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v5multilink.local";
+  option domain-name "multiwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.19.1;
   option broadcast-address 192.168.19.255;
@@ -602,7 +632,7 @@ subnet 192.168.19.0 netmask 255.255.255.0 {
 subnet 192.168.20.0 netmask 255.255.255.0 {
   range 192.168.20.11 192.168.20.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v5multilink.local";
+  option domain-name "multiwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.20.1;
   option broadcast-address 192.168.20.255;
@@ -613,7 +643,7 @@ subnet 192.168.20.0 netmask 255.255.255.0 {
 subnet 192.168.21.0 netmask 255.255.255.0 {
   range 192.168.21.11 192.168.21.254;
   option domain-name-servers 8.8.8.8;
-  option domain-name "v5multilink.local";
+  option domain-name "multiwan.local";
   option subnet-mask 255.255.255.0;
   option routers 192.168.21.1;
   option broadcast-address 192.168.21.255;
@@ -741,7 +771,7 @@ EOF
 
 # Function to display final summary
 display_summary() {
-    echo "✅ V5 Multi Uplink Setup Complete!"
+    echo "✅ Multi-WAN Network Setup Complete!"
     echo ""
     echo "==============================================================="
     echo "                    CONFIGURATION SUMMARY"
@@ -758,23 +788,23 @@ display_summary() {
     
     echo ""
     echo "🐳 Docker Containers Started:"
-    echo "   • frr_v5 (FRR Routing - $NUM_UPLINKS interfaces)"
-    echo "   • dhcpd_v5 (DHCP Server)"
-    echo "   • radiusd_v5 (RADIUS Server)"
+    echo "   • frr_multi (FRR Routing - $NUM_UPLINKS interfaces)"
+    echo "   • dhcpd_multi (DHCP Server)"
+    echo "   • radiusd_multi (RADIUS Server)"
     echo ""
     echo "🔧 Services Configured:"
     echo "   • NAT and IP Forwarding enabled"
     echo "   • OSPF routing for all $NUM_UPLINKS uplinks"
     echo "   • Static IP addresses assigned"
     echo ""
-    echo "ℹ️  Use v5_multi_uplink_cleanup.sh to remove all configuration when done"
+    echo "ℹ️  Use multi_wan_cleanup.sh to remove all configuration when done"
 }
 
 # ===============================================================
 #                         MAIN EXECUTION
 # ===============================================================
 
-echo "🔍 Starting V5 Multi Uplink configuration process..."
+echo "🔍 Starting Multi-WAN Network configuration process..."
 echo ""
 
 # Prompt for number of uplinks
@@ -831,4 +861,4 @@ create_radiusd_container
 # Display final summary
 display_summary
 
-echo "🎉 V5 Multi Uplink Demo setup completed successfully!"
+echo "🎉 Multi-WAN Network setup completed successfully!"

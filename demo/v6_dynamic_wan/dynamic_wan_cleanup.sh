@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo "🧹 Dynamic WAN Network Cleanup Script"
 echo "======================================"
-echo "This script will undo all changes made by dynamic_wan_demo.sh"
+echo "This script will undo all changes made by dynamic_wan_setup.sh"
 echo "Includes cleanup for variable number of interfaces (1, 2, or 4)"
 echo ""
 
@@ -284,7 +284,7 @@ cleanup_containers() {
     echo "🐳 Cleaning up Docker containers..."
     
     # Stop and remove Dynamic WAN specific containers
-    local containers=("frr_dynamicwan" "dhcpd_dynamicwan" "radiusd_dynamicwan")
+    local containers=("frr_dyn" "dhcpd_dyn" "radiusd_dyn")
     
     for container in "${containers[@]}"; do
         if docker ps -a --format "table {{.Names}}" | grep -q "^${container}$" 2>/dev/null; then
@@ -320,7 +320,7 @@ cleanup_config_files() {
     echo "📄 Cleaning up configuration files..."
     
     local config_files=(
-        "frr_dynamicwan.conf"
+        "frr_dyn.conf"
         "daemons"
         "dhcpdContainerfile"
         "dhcpdStartup.sh"
@@ -630,13 +630,13 @@ cleanup_ospf_routes() {
 display_cleanup_info() {
     echo "🔍 Dynamic WAN Network configuration to be cleaned up:"
     echo ""
-    echo "   🐳 Docker Containers: frr_dynamicwan, dhcpd_dynamicwan, radiusd_dynamicwan"
+    echo "   🐳 Docker Containers: frr_dyn, dhcpd_dyn, radiusd_dyn"
     echo "   🌐 IP Addresses: All Dynamic WAN IPs (172.16.x.1/30 pattern) from all interfaces"
     echo "   🌐 Interfaces: Read from Dynamic WAN state file (/etc/dynamicwan_configured_interfaces.conf) when available"
     echo "   🔧 Services: setup-nat-dynamicwan.service and older NAT services"
     echo "   🧹 iptables: MASQUERADE NAT rules (automatically detected and removed)"
     echo "   ⚙️  sysctl: net.ipv4.ip_forward setting in /etc/sysctl.conf"
-    echo "   📄 Config Files: frr_dynamicwan.conf, dhcpd.conf, radius configs"
+    echo "   📄 Config Files: frr_dyn.conf, dhcpd.conf, radius configs"
     echo "   🛡️  SAFETY: Only removes Dynamic WAN specific configurations (172.16.x.1/30 IPs)"
     echo "   🔒 Other interface configurations remain untouched"
     echo "   🌍 Universal: Works on any server regardless of interface naming"
@@ -714,7 +714,7 @@ main_cleanup() {
     echo "📋 Summary of actions performed:"
     echo "   • SAFELY removed Dynamic WAN interfaces from netplan (using Dynamic WAN state file when available)"
     echo "   • Removed Dynamic WAN IP addresses directly from interfaces (172.16.x.1/30 pattern)"
-    echo "   • Stopped and removed Docker containers (frr_dynamicwan, dhcpd_dynamicwan, radiusd_dynamicwan)"
+    echo "   • Stopped and removed Docker containers (frr_dyn, dhcpd_dyn, radiusd_dyn)"
     echo "   • Preserved Docker images (dhcpd, radiusd) for reuse"
     echo "   • Removed all Dynamic WAN configuration files and state file"
     echo "   • Stopped and removed Dynamic WAN NAT systemd service"
@@ -731,7 +731,7 @@ main_cleanup() {
 }
 
 # Confirmation prompt
-echo "⚠️  WARNING: This will undo all changes made by dynamic_wan_demo.sh"
+echo "⚠️  WARNING: This will undo all changes made by dynamic_wan_setup.sh"
 echo "   This includes:"
 echo "   • Removing Docker containers"
 echo "   • Restoring network configuration for Dynamic WAN interfaces"

@@ -148,10 +148,10 @@ display_configuration() {
 
 # Function to run FRR container
 create_frr_container() {
-    local containerName="frr_dynamicwan"
+    local containerName="frr_dyn"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
-    -v ./frr_dynamicwan.conf:/etc/frr/frr.conf:Z \
+    -v ./frr_dyn.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
 
@@ -161,7 +161,7 @@ create_frr_container() {
 
 # Function to run DHCPD container
 create_dhcpd_container() {
-    local containerName="dhcpd_dynamicwan"
+    local containerName="dhcpd_dyn"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      dhcpd
@@ -172,7 +172,7 @@ create_dhcpd_container() {
 
 # Function to run RADIUS container
 create_radiusd_container() {
-    local containerName="radiusd_dynamicwan"
+    local containerName="radiusd_dyn"
     
     docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      radiusd
@@ -183,7 +183,7 @@ create_radiusd_container() {
 
 # Function to generate dynamic FRR config file
 generate_frr_config() {
-    local config_file="frr_dynamicwan.conf"
+    local config_file="frr_dyn.conf"
 
     cat <<EOF > "$config_file"
 frr version 8.4_git
@@ -767,9 +767,9 @@ display_summary() {
     
     echo ""
     echo "🐳 Docker Containers Started:"
-    echo "   • frr_dynamicwan (FRR Routing - $NUM_ACTIVE_UPLINKS interfaces)"
-    echo "   • dhcpd_dynamicwan (DHCP Server)"
-    echo "   • radiusd_dynamicwan (RADIUS Server)"
+    echo "   • frr_dyn (FRR Routing - $NUM_ACTIVE_UPLINKS interfaces)"
+    echo "   • dhcpd_dyn (DHCP Server)"
+    echo "   • radiusd_dyn (RADIUS Server)"
     echo ""
     echo "🔧 Services Configured:"
     echo "   • NAT and IP Forwarding enabled"

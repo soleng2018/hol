@@ -1,6 +1,90 @@
 #!/bin/bash
 set -euo pipefail
 
+# Global flags to track rollback state
+ROLLBACK_NEEDED=false
+NETPLAN_APPLIED=false
+
+# Function to rollback changes if something fails
+rollback_changes() {
+    local exit_code=$?
+    if [ "$ROLLBACK_NEEDED" = true ] && [ $exit_code -ne 0 ]; then
+        echo ""
+        echo "🚨 ERROR DETECTED - ROLLING BACK CHANGES"
+        echo "========================================"
+        
+        if [ "$NETPLAN_APPLIED" = true ] && [ -n "${ACTIVE_INTERFACES:-}" ]; then
+            echo "🔄 Rolling back netplan configuration..."
+            
+            # Find netplan file
+            local netplan_file=$(ls /etc/netplan/*.yaml 2>/dev/null | head -1)
+            if [ -n "$netplan_file" ]; then
+                # Remove the interfaces we configured
+                for interface in "${ACTIVE_INTERFACES[@]:-}"; do
+                    echo "   🗑️  Removing interface $interface from netplan..."
+                    
+                    # Remove interface using Python (same logic as cleanup script)
+                    sudo python3 -c "
+import yaml
+import sys
+
+try:
+    with open('$netplan_file', 'r') as f:
+        config = yaml.safe_load(f)
+    
+    if 'network' in config and 'ethernets' in config['network']:
+        if '$interface' in config['network']['ethernets']:
+            del config['network']['ethernets']['$interface']
+            print('   ✅ Removed $interface from netplan')
+        else:
+            print('   ℹ️  Interface $interface not found in netplan')
+    
+    with open('$netplan_file', 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+except Exception as e:
+    print(f'   ❌ Error removing $interface: {e}')
+" 2>/dev/null || echo "   ⚠️  Failed to remove $interface"
+                done
+                
+                # Apply rollback
+                echo "   🔄 Applying netplan rollback..."
+                if sudo netplan apply 2>/dev/null; then
+                    echo "   ✅ Successfully rolled back netplan configuration"
+                else
+                    echo "   ⚠️  Warning: Failed to apply netplan rollback automatically"
+                    echo "   ℹ️  You may need to manually run 'sudo netplan apply'"
+                fi
+            else
+                echo "   ⚠️  Could not find netplan file for rollback"
+            fi
+        fi
+        
+        # Clean up any temporary files
+        local temp_state_file="/tmp/dynamicwan_configured_interfaces.conf"
+        if [ -f "$temp_state_file" ]; then
+            rm -f "$temp_state_file"
+            echo "   🗑️  Cleaned up temporary state file"
+        fi
+        
+        echo ""
+        echo "❌ ROLLBACK COMPLETED"
+        echo "   All network configuration changes have been reverted"
+        echo "   System should be back to original state"
+        echo ""
+        exit 1
+    fi
+}
+
+# Function to disable rollback when script completes successfully
+disable_rollback() {
+    ROLLBACK_NEEDED=false
+    trap - ERR EXIT
+}
+
+# Trap to handle script failures and rollback
+trap rollback_changes ERR EXIT
+
 echo "🚀 Dynamic WAN Network Setup Script"
 echo "===================================="
 echo "This script configures 1-4 network uplinks dynamically using parameters.txt"
@@ -27,6 +111,42 @@ check_interface() {
         ip link show | grep -E "^[0-9]+:" | awk -F': ' '{print "     " $2}' | sed 's/@.*$//'
         exit 1
     fi
+}
+
+# Function to check if user has sudo access
+check_sudo_access() {
+    echo "🔐 Checking sudo access..."
+    
+    # Check if sudo is available and user can use it
+    if ! command -v sudo &> /dev/null; then
+        echo "❌ ERROR: sudo is not installed on this system"
+        echo "   This script requires sudo access to configure network settings"
+        exit 1
+    fi
+    
+    # Test sudo access
+    if ! sudo -n true 2>/dev/null; then
+        echo "🔐 This script requires sudo privileges for network configuration"
+        echo "   Please enter your password when prompted"
+        
+        # Prompt for password with timeout
+        if ! sudo -v; then
+            echo "❌ ERROR: Unable to obtain sudo privileges"
+            echo "   This script requires sudo access to:"
+            echo "   • Modify netplan configuration"
+            echo "   • Create system services"
+            echo "   • Configure iptables rules"
+            echo "   • Write system state files"
+            exit 1
+        fi
+        echo "✅ Sudo access confirmed"
+    else
+        echo "✅ Sudo access already available"
+    fi
+    
+    # Keep sudo timestamp fresh for the duration of the script
+    sudo -v
+    echo "--------------------------------------------------------------"
 }
 
 # Function to check if Python3 is installed
@@ -64,10 +184,39 @@ check_pyyaml() {
 # Function to check and install dependencies
 check_dependencies() {
     echo "🔍 Checking dependencies..."
+    check_sudo_access
     check_python3
     check_pyyaml
     echo "✅ All dependencies are available"
     echo "--------------------------------------------------------------"
+}
+
+# Function to validate subnet mask
+validate_subnet_mask() {
+    local ip_with_mask="$1"
+    local param_name="$2"
+    local uplink_num="$3"
+    
+    # Extract subnet mask
+    if [[ "$ip_with_mask" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/([0-9]+)$ ]]; then
+        local subnet_mask="${BASH_REMATCH[1]}"
+        
+        # Check if subnet mask is in valid range (1-32)
+        if [ "$subnet_mask" -lt 1 ] || [ "$subnet_mask" -gt 32 ]; then
+            echo "❌ ERROR: Invalid subnet mask /$subnet_mask in uplink $uplink_num"
+            echo "   Parameter: $param_name = $ip_with_mask"
+            echo "   Subnet mask must be between /1 and /32"
+            echo "   Examples: /24 (254 hosts), /30 (2 hosts), /32 (1 host)"
+            exit 1
+        fi
+        
+        echo "✅ Valid /$subnet_mask subnet mask for $param_name"
+    else
+        echo "❌ ERROR: Invalid IP address format in uplink $uplink_num"
+        echo "   Parameter: $param_name = $ip_with_mask"
+        echo "   Expected format: x.x.x.x/y (e.g., 172.16.0.1/24, 172.16.0.1/30, 172.16.0.1/32)"
+        exit 1
+    fi
 }
 
 # Function to parse and validate parameters.txt file
@@ -98,6 +247,60 @@ parse_parameters() {
             echo "ℹ️  Uplink $i: Disabled (empty parameters)"
             continue
         fi
+        
+        # Validate subnet masks (must be /1 to /32)
+        echo "🔍 Validating uplink $i subnet masks..."
+        validate_subnet_mask "$lan_ip" "uplink${i}_lan_ip" "$i"
+        validate_subnet_mask "$lan_subnet" "uplink${i}_lan_subnet" "$i"
+        
+        # Validate that lan_subnet matches the network portion of lan_ip
+        local ip_addr=$(echo "$lan_ip" | cut -d'/' -f1)
+        local ip_mask=$(echo "$lan_ip" | cut -d'/' -f2)
+        local subnet_addr=$(echo "$lan_subnet" | cut -d'/' -f1)
+        local subnet_mask=$(echo "$lan_subnet" | cut -d'/' -f2)
+        
+        # Ensure both have the same subnet mask
+        if [ "$ip_mask" != "$subnet_mask" ]; then
+            echo "❌ ERROR: Subnet mask mismatch in uplink $i"
+            echo "   LAN IP: $lan_ip (mask: /$ip_mask)"
+            echo "   LAN Subnet: $lan_subnet (mask: /$subnet_mask)"
+            echo "   Both must use the same subnet mask"
+            exit 1
+        fi
+        
+        # Calculate network address from the lan_ip
+        local ip_octets=($(echo "$ip_addr" | tr '.' ' '))
+        local expected_network=""
+        
+        # Calculate subnet mask in decimal format
+        local mask_bits=$ip_mask
+        local mask_value=$((0xFFFFFFFF << (32 - mask_bits)))
+        
+        # Convert IP to 32-bit integer
+        local ip_int=$(( (${ip_octets[0]} << 24) + (${ip_octets[1]} << 16) + (${ip_octets[2]} << 8) + ${ip_octets[3]} ))
+        
+        # Apply subnet mask to get network address
+        local network_int=$((ip_int & mask_value))
+        
+        # Convert back to dotted decimal
+        local net_octet1=$(((network_int >> 24) & 0xFF))
+        local net_octet2=$(((network_int >> 16) & 0xFF))
+        local net_octet3=$(((network_int >> 8) & 0xFF))
+        local net_octet4=$((network_int & 0xFF))
+        
+        local expected_network="$net_octet1.$net_octet2.$net_octet3.$net_octet4"
+        
+        if [ "$subnet_addr" != "$expected_network" ]; then
+            echo "❌ ERROR: LAN subnet does not match LAN IP network in uplink $i"
+            echo "   LAN IP: $lan_ip"
+            echo "   LAN Subnet: $lan_subnet"
+            echo "   Expected LAN Subnet: $expected_network/$ip_mask"
+            echo ""
+            echo "   The LAN subnet must be the network address of the LAN IP's /$ip_mask subnet"
+            exit 1
+        fi
+        
+        echo "✅ LAN subnet matches LAN IP network (/$ip_mask)"
         
         # Validate interface exists
         echo "🔍 Validating uplink $i interface: $interface"
@@ -304,6 +507,8 @@ configure_netplan() {
 
     # Apply the netplan configuration
     sudo netplan apply
+    NETPLAN_APPLIED=true
+    ROLLBACK_NEEDED=true
     
     echo "✅ All $NUM_ACTIVE_UPLINKS active uplink(s) configured with static IPs"
     for ((i=0; i<NUM_ACTIVE_UPLINKS; i++)); do
@@ -346,9 +551,9 @@ setup_nat() {
         
         # Record internet interface in state file for cleanup tracking
         if [ -n "$DYNAMIC_WAN_STATE_FILE" ]; then
-            echo "# Internet interface used for NAT" >> "$DYNAMIC_WAN_STATE_FILE"
-            echo "internet_interface=$INTERNET_IFACE" >> "$DYNAMIC_WAN_STATE_FILE"
-            echo "" >> "$DYNAMIC_WAN_STATE_FILE"
+            echo "# Internet interface used for NAT" | sudo tee -a "$DYNAMIC_WAN_STATE_FILE" > /dev/null
+            echo "internet_interface=$INTERNET_IFACE" | sudo tee -a "$DYNAMIC_WAN_STATE_FILE" > /dev/null
+            echo "" | sudo tee -a "$DYNAMIC_WAN_STATE_FILE" > /dev/null
         fi
     else
         echo "❌ No default internet interface found."
@@ -844,4 +1049,7 @@ echo "   • Parameter file: $PARAMS_FILE"
 echo "   • Active uplinks: $NUM_ACTIVE_UPLINKS"
 echo "   • State file: /etc/dynamicwan_configured_interfaces.conf"
 echo "   • Domain: dynamicwan.local"
+
+# Disable rollback since everything completed successfully
+disable_rollback
 

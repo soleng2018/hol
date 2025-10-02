@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Make script executable
+chmod +x "$0"
+
 install_required_packages() {
   if ! command -v brew &> /dev/null; then
     echo "$(date): Installing Homebrew..."
@@ -18,7 +21,7 @@ install_required_packages() {
 
 get_usb_ethernet_interface() {
   networksetup -listallhardwareports | awk '
-  $0 ~ /Hardware Port: USB Ethernet/ {getline; getline; print $2; exit}
+  $0 ~ /Hardware Port: USB 10\/100\/1000 LAN/ {getline; print $2; exit}
   '
 }
 

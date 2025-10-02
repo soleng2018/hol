@@ -21,7 +21,12 @@ install_required_packages() {
 
 get_usb_ethernet_interface() {
   networksetup -listallhardwareports | awk '
-  $0 ~ /Hardware Port: USB 10\/100\/1000 LAN/ {getline; print $2; exit}
+  $0 ~ /Hardware Port: USB 10\/100\/1000 LAN/ {
+    # Extract the service name (everything after "Hardware Port: ")
+    gsub(/Hardware Port: /, "", $0)
+    print $0
+    exit
+  }
   '
 }
 

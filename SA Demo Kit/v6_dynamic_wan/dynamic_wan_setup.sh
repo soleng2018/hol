@@ -181,12 +181,179 @@ check_pyyaml() {
     fi
 }
 
+# Function to check if Docker is installed
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo "🐳 Docker not found. Installing Docker..."
+        install_docker
+        handle_docker_permissions
+    else
+        echo "✅ Docker is available"
+        handle_docker_permissions
+    fi
+    
+    # Check if Docker daemon is running
+    if ! sudo docker info &> /dev/null; then
+        echo "🔄 Starting Docker daemon..."
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        
+        # Wait a moment for Docker to start
+        sleep 3
+        
+        if ! sudo docker info &> /dev/null; then
+            echo "❌ Failed to start Docker daemon"
+            exit 1
+        fi
+        echo "✅ Docker daemon started successfully"
+    else
+        echo "✅ Docker daemon is running"
+    fi
+}
+
+# Function to install Docker
+install_docker() {
+    echo "📦 Installing Docker..."
+    
+    # Update package index
+    sudo apt-get update
+    
+    # Install prerequisites
+    sudo apt-get install -y \
+        ca-certificates \
+        curl \
+        gnupg \
+        lsb-release
+    
+    # Add Docker's official GPG key
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+    
+    # Add Docker repository
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+      https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Update package index again
+    sudo apt-get update
+    
+    # Install Docker
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # Add current user to docker group
+    sudo usermod -aG docker "$USER"
+    
+    echo "✅ Docker installed successfully"
+    echo "ℹ️  Note: You may need to log out and back in for Docker group changes to take effect"
+}
+
+# Function to handle Docker permissions
+handle_docker_permissions() {
+    # Check if user is in docker group
+    if ! groups "$USER" | grep -qw docker; then
+        echo "👥 Adding user to docker group..."
+        sudo usermod -aG docker "$USER"
+        echo "✅ User added to docker group"
+        echo "ℹ️  Note: Docker group changes require a new login session"
+        echo "   For now, the script will use sudo for Docker commands"
+    else
+        echo "✅ User is already in docker group"
+    fi
+}
+
+# Function to check and install essential packages
+check_essential_packages() {
+    echo "📦 Checking essential packages..."
+    
+    local packages=(
+        "git"
+        "openssh-server"
+        "net-tools"
+        "iproute2"
+        "netplan.io"
+        "isc-dhcp-server"
+        "freeradius-utils"
+        "curl"
+        "wget"
+        "iptables"
+        "iptables-persistent"
+    )
+    
+    local missing_packages=()
+    
+    # Check which packages are missing
+    for package in "${packages[@]}"; do
+        if ! dpkg -l | grep -q "^ii.*$package "; then
+            missing_packages+=("$package")
+        fi
+    done
+    
+    # Install missing packages
+    if [ ${#missing_packages[@]} -gt 0 ]; then
+        echo "📥 Installing missing packages: ${missing_packages[*]}"
+        sudo apt-get update
+        sudo apt-get install -y "${missing_packages[@]}"
+        echo "✅ Essential packages installed successfully"
+    else
+        echo "✅ All essential packages are available"
+    fi
+}
+
+# Function to verify netplan configuration
+verify_netplan() {
+    echo "🔧 Verifying netplan configuration..."
+    
+    # Check if netplan is available
+    if ! command -v netplan &> /dev/null; then
+        echo "❌ netplan command not found"
+        echo "   Installing netplan.io..."
+        sudo apt-get install -y netplan.io
+        if ! command -v netplan &> /dev/null; then
+            echo "❌ Failed to install netplan"
+            exit 1
+        fi
+    fi
+    
+    # Check if netplan directory exists
+    if [ ! -d "/etc/netplan" ]; then
+        echo "❌ /etc/netplan directory not found"
+        echo "   Creating netplan directory..."
+        sudo mkdir -p /etc/netplan
+    fi
+    
+    # Check if there's at least one netplan file
+    local netplan_files=($(ls /etc/netplan/*.yaml 2>/dev/null || true))
+    if [ ${#netplan_files[@]} -eq 0 ]; then
+        echo "⚠️  No netplan configuration files found in /etc/netplan/"
+        echo "   Creating a basic netplan configuration..."
+        
+        # Create a basic netplan configuration
+        sudo tee /etc/netplan/01-netcfg.yaml > /dev/null <<EOF
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    # Network interfaces will be configured here
+EOF
+        
+        echo "✅ Created basic netplan configuration"
+    fi
+    
+    echo "✅ Netplan configuration verified"
+}
+
 # Function to check and install dependencies
 check_dependencies() {
     echo "🔍 Checking dependencies..."
     check_sudo_access
+    check_essential_packages
     check_python3
     check_pyyaml
+    check_docker
+    verify_netplan
     echo "✅ All dependencies are available"
     echo "--------------------------------------------------------------"
 }
@@ -353,7 +520,7 @@ display_configuration() {
 create_frr_container() {
     local containerName="frr_dyn"
     
-    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
+    sudo docker run -dt --name "$containerName" --network=host --privileged --restart=always \
     -v ./frr_dyn.conf:/etc/frr/frr.conf:Z \
     -v ./daemons:/etc/frr/daemons:Z  \
      docker.io/frrouting/frr
@@ -366,7 +533,7 @@ create_frr_container() {
 create_dhcpd_container() {
     local containerName="dhcpd_dyn"
     
-    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
+    sudo docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      dhcpd
 
     echo "✅ Started container $containerName"
@@ -377,7 +544,7 @@ create_dhcpd_container() {
 create_radiusd_container() {
     local containerName="radiusd_dyn"
     
-    docker run -dt --name "$containerName" --network=host --privileged --restart=always \
+    sudo docker run -dt --name "$containerName" --network=host --privileged --restart=always \
      radiusd
     
     echo "✅ Started container $containerName"
@@ -934,7 +1101,7 @@ create_docker_images() {
     echo "🐳 Creating Docker images..."
     
     # Create DHCP Image
-    docker build -t dhcpd -f dhcpdContainerfile .
+    sudo docker build -t dhcpd -f dhcpdContainerfile .
     echo "✅ DHCP Image created"
     
     # Create RADIUS Containerfile
@@ -948,7 +1115,7 @@ RUN cd /etc/raddb/certs && rm *.pem *.key *.crt *.p12 *.txt *.crl *.der *.old *.
 EOF
 
     # Create RADIUS Image
-    docker build -t radiusd -f radiusdContainerfile .
+    sudo docker build -t radiusd -f radiusdContainerfile .
     echo "✅ RADIUS Image created"
     echo "--------------------------------------------------------------"
 }

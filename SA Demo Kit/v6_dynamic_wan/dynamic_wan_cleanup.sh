@@ -287,10 +287,10 @@ cleanup_containers() {
     local containers=("frr_dyn" "dhcpd_dyn" "radiusd_dyn")
     
     for container in "${containers[@]}"; do
-        if docker ps -a --format "table {{.Names}}" | grep -q "^${container}$" 2>/dev/null; then
+        if sudo docker ps -a --format "table {{.Names}}" | grep -q "^${container}$" 2>/dev/null; then
             echo "🛑 Stopping and removing container: $container"
-            docker stop "$container" 2>/dev/null || true
-            docker rm "$container" 2>/dev/null || true
+            sudo docker stop "$container" 2>/dev/null || true
+            sudo docker rm "$container" 2>/dev/null || true
             echo "✅ Removed container: $container"
         else
             echo "ℹ️  Container $container not found"
@@ -305,7 +305,7 @@ check_images() {
     local images=("dhcpd" "radiusd")
     
     for image in "${images[@]}"; do
-        if docker images --format "table {{.Repository}}" | grep -q "^${image}$" 2>/dev/null; then
+        if sudo docker images --format "table {{.Repository}}" | grep -q "^${image}$" 2>/dev/null; then
             echo "✅ Image $image found (keeping for reuse)"
         else
             echo "ℹ️  Image $image not found"

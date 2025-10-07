@@ -2,17 +2,16 @@
 
 ## Overview
 
-The **SA Demo Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
+🚀The **SA Demo Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
 
-**🚀 NEW: Fully Automated Setup** - The script now automatically installs all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
+** It will automatically installs all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
 
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: Ubuntu 18.04+ (or compatible Debian-based system)
+- **Operating System**: 24.04.3 LTS
 - **Network Interfaces**: 1-4 physical network interfaces for uplinks
 - **Memory**: Minimum 2GB RAM (4GB+ recommended)
-- **Storage**: At least 10GB free disk space
 - **Network**: Internet connection for downloading packages and Docker images
 - **Access**: Sudo privileges (script will prompt for password)
 
@@ -187,7 +186,6 @@ Common interface names include:
 
 ### IP Address Requirements
 - Each uplink needs a unique `/30` subnet
-- Gateway IP should be `.1` in each subnet
 - Example: `172.16.0.1/30` with subnet `172.16.0.0/30`
 
 ## Troubleshooting
@@ -266,7 +264,7 @@ For issues or questions:
 ## Version Information
 
 - **Script Version**: v6_dynamic_wan (Enhanced)
-- **Compatible OS**: Ubuntu 18.04+
+- **Compatible OS**: Ubuntu 24.04.3 LTS
 - **Docker Images**: FRR, FreeRADIUS, Custom DHCP
 - **Features**: Fully automated installation, robust error handling, safe cleanup
 - **Last Updated**: 2025

@@ -7,10 +7,9 @@ The **SA Demo Kit** contains scripts for setting up and managing dynamic WAN con
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: Ubuntu 18.04+ (or compatible Debian-based system)
+- **Operating System**: Ubuntu 24.04.3 LTS 
 - **Network Interfaces**: 1-4 physical network interfaces for uplinks
 - **Memory**: Minimum 2GB RAM (4GB+ recommended)
-- **Storage**: At least 10GB free disk space
 - **Network**: Internet connection for downloading packages and Docker images
 
 ### Required Packages

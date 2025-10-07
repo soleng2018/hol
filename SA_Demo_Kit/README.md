@@ -1,8 +1,8 @@
-# SA Demo Kit - Dynamic WAN Configuration
+# SA_Demo_Kit - Dynamic WAN Configuration
 
 ## Overview
 
-🚀The **SA Demo Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
+🚀The **SA_Demo_Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
 
 ** It will automatically installs all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
 
@@ -55,7 +55,7 @@ The setup script will **automatically install** all required dependencies:
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/soleng2018/hol.git
-cd hol/SA\ Demo\ Kit/v6_dynamic_wan
+cd hol/SA_Demo_Kit/dynamic_wan
 ```
 
 ### 2. Make Scripts Executable
@@ -263,7 +263,7 @@ For issues or questions:
 
 ## Version Information
 
-- **Script Version**: v6_dynamic_wan (Enhanced)
+- **Script Version**: dynamic_wan (Enhanced)
 - **Compatible OS**: Ubuntu 24.04.3 LTS
 - **Docker Images**: FRR, FreeRADIUS, Custom DHCP
 - **Features**: Fully automated installation, robust error handling, safe cleanup

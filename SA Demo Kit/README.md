@@ -4,36 +4,51 @@
 
 The **SA Demo Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
 
+**🚀 NEW: Fully Automated Setup** - The script now automatically installs all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
+
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: Ubuntu 24.04.3 LTS 
+- **Operating System**: Ubuntu 18.04+ (or compatible Debian-based system)
 - **Network Interfaces**: 1-4 physical network interfaces for uplinks
 - **Memory**: Minimum 2GB RAM (4GB+ recommended)
+- **Storage**: At least 10GB free disk space
 - **Network**: Internet connection for downloading packages and Docker images
+- **Access**: Sudo privileges (script will prompt for password)
 
-### Required Packages
-The setup script will automatically install these dependencies:
+### Automatic Package Installation
+The setup script will **automatically install** all required dependencies:
 
-```bash
-# Core system packages
-sudo apt-get update
-sudo apt-get install -y python3 python3-yaml
+#### Core System Packages
+- `git` - Version control
+- `openssh-server` - SSH server
+- `net-tools` - Network utilities (ifconfig, netstat, etc.)
+- `iproute2` - Modern network tools (ip command)
+- `netplan.io` - Network configuration management
+- `curl`, `wget` - Download utilities
+- `iptables`, `iptables-persistent` - Firewall management
 
-# Docker (if not already installed)
-# The script will check and install Docker if needed
+#### Python Dependencies
+- `python3` - Python interpreter
+- `python3-yaml` - YAML configuration processing
 
-# Network management tools
-sudo apt-get install -y iproute2 netplan.io
+#### Docker & Container Tools
+- `docker-ce` - Docker Community Edition
+- `docker-ce-cli` - Docker command line interface
+- `containerd.io` - Container runtime
+- `docker-buildx-plugin` - Extended build capabilities
+- `docker-compose-plugin` - Container orchestration
 
-# Additional tools for container management
-sudo apt-get install -y isc-dhcp-server freeradius-utils
-```
+#### Network Services
+- `isc-dhcp-server` - DHCP server
+- `freeradius-utils` - RADIUS authentication utilities
+
+**✅ No Manual Installation Required** - The script handles everything automatically!
 
 ## Files Included
 
-- **`dynamic_wan_setup.sh`** - Main setup script for configuring dynamic WAN
-- **`dynamic_wan_cleanup.sh`** - Cleanup script to remove all configurations
+- **`dynamic_wan_setup.sh`** - Enhanced setup script with automatic package installation
+- **`dynamic_wan_cleanup.sh`** - Safe cleanup script (removes only configurations)
 - **`parameters.txt`** - Configuration file for interface settings
 
 ## Quick Start
@@ -84,38 +99,78 @@ uplink3_lan_ip=""
 uplink3_lan_subnet=""
 ```
 
-### 4. Run Setup
+### 4. Run Setup (Fully Automated!)
 ```bash
 sudo ./dynamic_wan_setup.sh
 ```
+
+**The script will automatically:**
+- ✅ Check and install all required packages
+- ✅ Install Docker if not present
+- ✅ Configure network interfaces
+- ✅ Deploy Docker containers
+- ✅ Set up routing and services
 
 ### 5. Cleanup (when done)
 ```bash
 sudo ./dynamic_wan_cleanup.sh
 ```
 
-## What the Setup Script Does
+## What the Enhanced Setup Script Does
 
-### 1. **Dependency Installation**
-- Installs Python3 and PyYAML for configuration management
-- Installs Docker if not present
-- Installs network management tools
+### 1. **Comprehensive Dependency Check & Installation**
+- **System Packages**: git, openssh-server, net-tools, iproute2, netplan.io, curl, wget, iptables
+- **Python Environment**: python3, python3-yaml
+- **Docker Installation**: Full Docker CE with official repository setup
+- **Network Services**: isc-dhcp-server, freeradius-utils
+- **Netplan Verification**: Creates basic configuration if none exists
 
-### 2. **Network Configuration**
-- Configures netplan for specified interfaces
-- Sets up static IP addresses on uplink interfaces
-- Applies network configuration changes
+### 2. **Robust Error Handling & Rollback**
+- **Automatic Rollback**: Reverts all changes if setup fails
+- **Docker Permissions**: Handles user group membership gracefully
+- **Interface Validation**: Verifies all specified interfaces exist
+- **Configuration Backup**: Creates state files for safe cleanup
 
-### 3. **Docker Container Deployment**
-- **FRR Container** (`frr_dyn`): Provides OSPF routing for dynamic WAN
-- **DHCP Container** (`dhcpd_dyn`): Handles DHCP services
-- **RADIUS Container** (`radiusd_dyn`): Provides authentication services
+### 3. **Network Configuration**
+- **Dynamic Interface Setup**: Supports 1, 2, or 4 uplink interfaces
+- **Netplan Management**: Automated YAML configuration updates
+- **IP Address Assignment**: Static IP configuration for each uplink
+- **NAT & Routing**: Automatic IP forwarding and NAT rules
 
-### 4. **Configuration Files Generated**
-- `frr_dyn.conf`: FRR routing configuration
+### 4. **Docker Container Deployment**
+- **FRR Container** (`frr_dyn`): OSPF routing for dynamic WAN
+- **DHCP Container** (`dhcpd_dyn`): DHCP services for each subnet
+- **RADIUS Container** (`radiusd_dyn`): Authentication services
+- **Custom Images**: Builds optimized container images
+
+### 5. **Configuration Files Generated**
+- `frr_dyn.conf`: Dynamic FRR routing configuration
 - `daemons`: FRR daemon configuration
-- `dhcpd.conf`: DHCP server configuration
-- Various RADIUS configuration files
+- `dhcpd.conf`: DHCP server configuration for all subnets
+- `clients.conf`, `authorize`: RADIUS authentication files
+- State tracking files for safe cleanup
+
+## New Features & Improvements
+
+### 🚀 **Fully Automated Installation**
+- **Zero Manual Setup**: All packages installed automatically
+- **Fresh Employee Ready**: No Linux/networking knowledge required
+- **Progress Indicators**: Clear status messages throughout installation
+
+### 🛡️ **Enhanced Error Handling**
+- **Rollback Protection**: Automatic cleanup on failure
+- **Dependency Validation**: Checks all requirements before proceeding
+- **Graceful Failures**: Clear error messages and recovery instructions
+
+### 🔧 **Improved Docker Management**
+- **Official Repository**: Uses Docker's official Ubuntu repository
+- **Permission Handling**: Automatic user group management
+- **Sudo Compatibility**: Works with or without Docker group membership
+
+### 📋 **Better Configuration Management**
+- **Netplan Verification**: Creates basic config if missing
+- **State Tracking**: Records all changes for safe cleanup
+- **Interface Validation**: Verifies interfaces before configuration
 
 ## Configuration Options
 
@@ -165,11 +220,11 @@ sudo netplan apply
 **4. Container Issues**
 ```bash
 # Check running containers
-docker ps -a
+sudo docker ps -a
 # Check container logs
-docker logs frr_dyn
-docker logs dhcpd_dyn
-docker logs radiusd_dyn
+sudo docker logs frr_dyn
+sudo docker logs dhcpd_dyn
+sudo docker logs radiusd_dyn
 ```
 
 ### Rollback on Failure
@@ -177,15 +232,19 @@ The setup script includes automatic rollback functionality. If setup fails:
 1. The script will attempt to undo netplan changes
 2. Remove any created containers
 3. Clean up configuration files
+4. Restore system to original state
 
 ## Cleanup Process
 
 The cleanup script (`dynamic_wan_cleanup.sh`) will:
-1. Stop and remove all Docker containers
-2. Remove interfaces from netplan configuration
-3. Apply netplan changes
-4. Clean up configuration files
-5. Preserve Docker images for future use
+1. **Stop and remove Docker containers** (frr_dyn, dhcpd_dyn, radiusd_dyn)
+2. **Remove interfaces from netplan** configuration
+3. **Apply netplan changes** to restore network
+4. **Clean up configuration files** (frr_dyn.conf, dhcpd.conf, etc.)
+5. **Preserve Docker images** for future use
+6. **Preserve all installed packages** - no system changes
+
+**✅ Safe Cleanup**: Only removes demo configurations, keeps all system packages and Docker images!
 
 ## Security Notes
 
@@ -193,6 +252,7 @@ The cleanup script (`dynamic_wan_cleanup.sh`) will:
 - Docker containers run with `--privileged` mode for network access
 - All network changes are logged for audit purposes
 - State files are created in `/etc/dynamicwan_configured_interfaces.conf`
+- User is automatically added to docker group for future use
 
 ## Support
 
@@ -201,14 +261,18 @@ For issues or questions:
 2. Review container logs for specific errors
 3. Ensure all prerequisites are met
 4. Verify interface names and IP configurations
+5. Check the automatic rollback logs if setup failed
 
 ## Version Information
 
-- **Script Version**: v6_dynamic_wan
+- **Script Version**: v6_dynamic_wan (Enhanced)
 - **Compatible OS**: Ubuntu 18.04+
 - **Docker Images**: FRR, FreeRADIUS, Custom DHCP
+- **Features**: Fully automated installation, robust error handling, safe cleanup
 - **Last Updated**: 2025
 
 ---
 
-**⚠️ Important**: Always run the cleanup script when finished with the demo to restore your system to its original network configuration.
+**⚠️ Important**: Always run the cleanup script when finished with the demo to restore your system to its original network configuration. The cleanup script only removes configurations, not packages.
+
+**🎉 Ready to Use**: This script is now production-ready and perfect for fresh employees with no Linux/networking experience!

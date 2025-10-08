@@ -699,28 +699,20 @@ configure_netplan() {
     echo "--------------------------------------------------------------"
 }
 
-# Function to detect internet-facing interface with metric consideration
+# Function to detect internet-facing interface
 detect_internet_interface() {
-    echo "🔍 Detecting internet-facing interface with metric consideration..."
-    
     # Method 1: Use actual route taken (most reliable)
     local primary_interface=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}')
     
     if [ -n "$primary_interface" ]; then
-        echo "✅ Primary interface via route lookup: $primary_interface" >&2
         echo "$primary_interface"
         return 0
     fi
     
-    # Method 2: Check default routes with metric consideration
-    echo "🔍 Checking default routes with metrics..." >&2
-    
-    # Get all default routes with their metrics, sorted by metric (lowest first)
+    # Method 2: Get interface with lowest metric (highest priority)
     local best_interface=$(ip route | grep '^default' | sort -k7 -n | head -1 | awk '{print $5}')
     
     if [ -n "$best_interface" ]; then
-        local best_metric=$(ip route | grep '^default' | sort -k7 -n | head -1 | awk '{print $7}')
-        echo "✅ Best interface by metric: $best_interface (metric: ${best_metric:-default})" >&2
         echo "$best_interface"
         return 0
     fi
@@ -729,12 +721,10 @@ detect_internet_interface() {
     local fallback_interface=$(ip route | grep '^default' | awk '{print $5}' | head -1)
     
     if [ -n "$fallback_interface" ]; then
-        echo "⚠️  Using fallback interface: $fallback_interface" >&2
         echo "$fallback_interface"
         return 0
     fi
     
-    echo "❌ No default internet interface found" >&2
     return 1
 }
 
@@ -742,7 +732,7 @@ detect_internet_interface() {
 setup_nat() {
     echo "🔧 Setting up NAT and IP forwarding..."
     
-    # Detect the internet-facing interface with metric consideration
+    # Detect the internet-facing interface
     echo "🔍 Detecting internet-facing interface..."
     INTERNET_IFACE=$(detect_internet_interface)
     
@@ -772,28 +762,20 @@ setup_nat() {
 #!/bin/bash
 set -euo pipefail
 
-# Function to detect internet-facing interface with metric consideration
+# Function to detect internet-facing interface
 detect_internet_interface() {
-    echo "🔍 Detecting internet-facing interface with metric consideration..." >&2
-    
     # Method 1: Use actual route taken (most reliable)
     local primary_interface=\$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if(\$i=="dev") print \$(i+1)}')
     
     if [ -n "\$primary_interface" ]; then
-        echo "✅ Primary interface via route lookup: \$primary_interface" >&2
         echo "\$primary_interface"
         return 0
     fi
     
-    # Method 2: Check default routes with metric consideration
-    echo "🔍 Checking default routes with metrics..." >&2
-    
-    # Get all default routes with their metrics, sorted by metric (lowest first)
+    # Method 2: Get interface with lowest metric (highest priority)
     local best_interface=\$(ip route | grep '^default' | sort -k7 -n | head -1 | awk '{print \$5}')
     
     if [ -n "\$best_interface" ]; then
-        local best_metric=\$(ip route | grep '^default' | sort -k7 -n | head -1 | awk '{print \$7}')
-        echo "✅ Best interface by metric: \$best_interface (metric: \${best_metric:-default})" >&2
         echo "\$best_interface"
         return 0
     fi
@@ -802,12 +784,10 @@ detect_internet_interface() {
     local fallback_interface=\$(ip route | grep '^default' | awk '{print \$5}' | head -1)
     
     if [ -n "\$fallback_interface" ]; then
-        echo "⚠️  Using fallback interface: \$fallback_interface" >&2
         echo "\$fallback_interface"
         return 0
     fi
     
-    echo "❌ No default internet interface found" >&2
     return 1
 }
 

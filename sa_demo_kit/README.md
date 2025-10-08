@@ -1,46 +1,20 @@
-# SA_Demo_Kit - Dynamic WAN Configuration
+# sa_demo_kit - Dynamic WAN Configuration
 
 ## Overview
 
-🚀The **SA_Demo_Kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
+🚀 The **sa_demo_kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
 
-** It will automatically installs all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
+**🚀 NEW: Fully Automated Setup** - It will automatically install all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
 
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: 24.04.3 LTS
+- **Operating System**: Ubuntu 24.04.3 LTS
 - **Network Interfaces**: 1-4 physical network interfaces for uplinks
 - **Memory**: Minimum 2GB RAM (4GB+ recommended)
 - **Network**: Internet connection for downloading packages and Docker images
 - **Access**: Sudo privileges (script will prompt for password)
 
-### Automatic Package Installation
-The setup script will **automatically install** all required dependencies:
-
-#### Core System Packages
-- `git` - Version control
-- `openssh-server` - SSH server
-- `net-tools` - Network utilities (ifconfig, netstat, etc.)
-- `iproute2` - Modern network tools (ip command)
-- `netplan.io` - Network configuration management
-- `curl`, `wget` - Download utilities
-- `iptables`, `iptables-persistent` - Firewall management
-
-#### Python Dependencies
-- `python3` - Python interpreter
-- `python3-yaml` - YAML configuration processing
-
-#### Docker & Container Tools
-- `docker-ce` - Docker Community Edition
-- `docker-ce-cli` - Docker command line interface
-- `containerd.io` - Container runtime
-- `docker-buildx-plugin` - Extended build capabilities
-- `docker-compose-plugin` - Container orchestration
-
-#### Network Services
-- `isc-dhcp-server` - DHCP server
-- `freeradius-utils` - RADIUS authentication utilities
 
 **✅ No Manual Installation Required** - The script handles everything automatically!
 
@@ -55,7 +29,7 @@ The setup script will **automatically install** all required dependencies:
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/soleng2018/hol.git
-cd hol/SA_Demo_Kit/dynamic_wan
+cd hol/sa_demo_kit/dynamic_wan
 ```
 
 ### 2. Make Scripts Executable
@@ -149,28 +123,6 @@ sudo ./dynamic_wan_cleanup.sh
 - `clients.conf`, `authorize`: RADIUS authentication files
 - State tracking files for safe cleanup
 
-## New Features & Improvements
-
-### 🚀 **Fully Automated Installation**
-- **Zero Manual Setup**: All packages installed automatically
-- **Fresh Employee Ready**: No Linux/networking knowledge required
-- **Progress Indicators**: Clear status messages throughout installation
-
-### 🛡️ **Enhanced Error Handling**
-- **Rollback Protection**: Automatic cleanup on failure
-- **Dependency Validation**: Checks all requirements before proceeding
-- **Graceful Failures**: Clear error messages and recovery instructions
-
-### 🔧 **Improved Docker Management**
-- **Official Repository**: Uses Docker's official Ubuntu repository
-- **Permission Handling**: Automatic user group management
-- **Sudo Compatibility**: Works with or without Docker group membership
-
-### 📋 **Better Configuration Management**
-- **Netplan Verification**: Creates basic config if missing
-- **State Tracking**: Records all changes for safe cleanup
-- **Interface Validation**: Verifies interfaces before configuration
-
 ## Configuration Options
 
 ### Supported Uplink Configurations
@@ -263,7 +215,6 @@ For issues or questions:
 
 ## Version Information
 
-- **Script Version**: dynamic_wan (Enhanced)
 - **Compatible OS**: Ubuntu 24.04.3 LTS
 - **Docker Images**: FRR, FreeRADIUS, Custom DHCP
 - **Features**: Fully automated installation, robust error handling, safe cleanup

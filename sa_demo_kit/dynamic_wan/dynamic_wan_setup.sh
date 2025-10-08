@@ -699,22 +699,111 @@ configure_netplan() {
     echo "--------------------------------------------------------------"
 }
 
+# Function to detect the best internet-facing interface automatically
+detect_best_internet_interface() {
+    echo "🔍 Automatically detecting best internet interface..."
+    
+    # Method 1: Use actual route taken (most reliable)
+    local primary_interface=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}')
+    
+    if [ -n "$primary_interface" ]; then
+        echo "✅ Primary interface via route lookup: $primary_interface"
+        echo "$primary_interface"
+        return 0
+    fi
+    
+    # Method 2: Analyze all default routes by priority
+    echo "🔍 Analyzing default routes by priority..."
+    
+    local best_interface=""
+    local best_score=999999
+    
+    # Get all default routes
+    while IFS= read -r route; do
+        local interface=$(echo "$route" | awk '{print $5}')
+        local metric=$(echo "$route" | awk '{print $7}')
+        local gateway=$(echo "$route" | awk '{print $3}')
+        
+        # Skip if interface doesn't exist or is down
+        if ! ip link show "$interface" &>/dev/null; then
+            continue
+        fi
+        
+        # Calculate priority score (lower = better)
+        local score=0
+        
+        # 1. Metric-based scoring (most important)
+        if [ -n "$metric" ] && [ "$metric" -gt 0 ]; then
+            score=$((score + metric * 10))
+        else
+            score=$((score + 50))  # Default metric penalty
+        fi
+        
+        # 2. Interface type scoring
+        if [[ "$interface" =~ ^(eth|enp|ens|em) ]]; then
+            score=$((score - 20))  # Wired = better
+        elif [[ "$interface" =~ ^(wlan|wlp|wifi) ]]; then
+            score=$((score + 30))  # Wireless = worse
+        fi
+        
+        # 3. Interface state scoring
+        if ip link show "$interface" | grep -q "state UP.*LOWER_UP"; then
+            score=$((score - 10))  # Up with carrier = better
+        else
+            score=$((score + 50))  # Down = much worse
+        fi
+        
+        # 4. Gateway reachability test (quick ping)
+        if ping -c 1 -W 1 "$gateway" &>/dev/null; then
+            score=$((score - 5))   # Reachable = better
+        else
+            score=$((score + 20))  # Unreachable = worse
+        fi
+        
+        echo "  Interface: $interface, Gateway: $gateway, Metric: ${metric:-default}, Score: $score"
+        
+        # Keep track of best interface
+        if [ "$score" -lt "$best_score" ]; then
+            best_score=$score
+            best_interface="$interface"
+        fi
+        
+    done < <(ip route | grep '^default')
+    
+    if [ -n "$best_interface" ]; then
+        echo "✅ Best interface selected: $best_interface (score: $best_score)"
+        echo "$best_interface"
+        return 0
+    fi
+    
+    # Method 3: Fallback to first available
+    local fallback=$(ip route | grep '^default' | awk '{print $5}' | head -1)
+    if [ -n "$fallback" ]; then
+        echo "⚠️  Using fallback interface: $fallback"
+        echo "$fallback"
+        return 0
+    fi
+    
+    echo "❌ No suitable internet interface found"
+    return 1
+}
+
 # Function to setup NAT and IP forwarding
 setup_nat() {
     echo "🔧 Setting up NAT and IP forwarding..."
     
-    # Get the interface used for the default route (internet access)
-    echo "🔍 Detecting internet-facing interface..."
-    
-    INTERNET_IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}')
-    
-    # Fallback method if the first one fails
-    if [ -z "$INTERNET_IFACE" ]; then
-        INTERNET_IFACE=$(ip route | grep '^default' | awk '{print $5}' | head -1)
-    fi
+    # Detect the best internet-facing interface automatically
+    echo "🔍 Detecting best internet-facing interface..."
+    INTERNET_IFACE=$(detect_best_internet_interface)
     
     if [ -n "$INTERNET_IFACE" ]; then
-        echo "✅ Internet-facing interface: $INTERNET_IFACE"
+        echo "✅ Selected interface: $INTERNET_IFACE"
+        
+        # Validate interface
+        if ! ip link show "$INTERNET_IFACE" &>/dev/null; then
+            echo "❌ Selected interface $INTERNET_IFACE does not exist"
+            exit 1
+        fi
         
         # Record internet interface in state file for cleanup tracking
         if [ -n "$DYNAMIC_WAN_STATE_FILE" ]; then
@@ -723,7 +812,7 @@ setup_nat() {
             echo "" | sudo tee -a "$DYNAMIC_WAN_STATE_FILE" > /dev/null
         fi
     else
-        echo "❌ No default internet interface found."
+        echo "❌ No suitable internet interface found."
         echo "   Please ensure you have internet connectivity before running this script."
         exit 1
     fi
@@ -733,22 +822,93 @@ setup_nat() {
 #!/bin/bash
 set -euo pipefail
 
-# Function to detect the internet-facing interface
-detect_internet_interface() {
-    INTERNET_IFACE=\$(ip route | awk '/^default/ {print \$5; exit}')
+# Function to detect the best internet-facing interface automatically
+detect_best_internet_interface() {
+    echo "🔍 Automatically detecting best internet interface..." >&2
     
-    if [ -n "\$INTERNET_IFACE" ]; then
-        if ip link show "\$INTERNET_IFACE" &>/dev/null && ip link show "\$INTERNET_IFACE" | grep -q "state UP"; then
-            echo "Internet-facing interface: \$INTERNET_IFACE" >&2
-            echo "\$INTERNET_IFACE"
-        else
-            echo "Warning: Interface \$INTERNET_IFACE found in routing table but is not available or not up" >&2
-            exit 1
-        fi
-    else
-        echo "No default internet interface found." >&2
-        exit 1
+    # Method 1: Use actual route taken (most reliable)
+    local primary_interface=\$(ip route get 8.8.8.8 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if(\$i=="dev") print \$(i+1)}')
+    
+    if [ -n "\$primary_interface" ]; then
+        echo "✅ Primary interface via route lookup: \$primary_interface" >&2
+        echo "\$primary_interface"
+        return 0
     fi
+    
+    # Method 2: Analyze all default routes by priority
+    echo "🔍 Analyzing default routes by priority..." >&2
+    
+    local best_interface=""
+    local best_score=999999
+    
+    # Get all default routes
+    while IFS= read -r route; do
+        local interface=\$(echo "\$route" | awk '{print \$5}')
+        local metric=\$(echo "\$route" | awk '{print \$7}')
+        local gateway=\$(echo "\$route" | awk '{print \$3}')
+        
+        # Skip if interface doesn't exist or is down
+        if ! ip link show "\$interface" &>/dev/null; then
+            continue
+        fi
+        
+        # Calculate priority score (lower = better)
+        local score=0
+        
+        # 1. Metric-based scoring (most important)
+        if [ -n "\$metric" ] && [ "\$metric" -gt 0 ]; then
+            score=\$((score + metric * 10))
+        else
+            score=\$((score + 50))  # Default metric penalty
+        fi
+        
+        # 2. Interface type scoring
+        if [[ "\$interface" =~ ^(eth|enp|ens|em) ]]; then
+            score=\$((score - 20))  # Wired = better
+        elif [[ "\$interface" =~ ^(wlan|wlp|wifi) ]]; then
+            score=\$((score + 30))  # Wireless = worse
+        fi
+        
+        # 3. Interface state scoring
+        if ip link show "\$interface" | grep -q "state UP.*LOWER_UP"; then
+            score=\$((score - 10))  # Up with carrier = better
+        else
+            score=\$((score + 50))  # Down = much worse
+        fi
+        
+        # 4. Gateway reachability test (quick ping)
+        if ping -c 1 -W 1 "\$gateway" &>/dev/null; then
+            score=\$((score - 5))   # Reachable = better
+        else
+            score=\$((score + 20))  # Unreachable = worse
+        fi
+        
+        echo "  Interface: \$interface, Gateway: \$gateway, Metric: \${metric:-default}, Score: \$score" >&2
+        
+        # Keep track of best interface
+        if [ "\$score" -lt "\$best_score" ]; then
+            best_score=\$score
+            best_interface="\$interface"
+        fi
+        
+    done < <(ip route | grep '^default')
+    
+    if [ -n "\$best_interface" ]; then
+        echo "✅ Best interface selected: \$best_interface (score: \$best_score)" >&2
+        echo "\$best_interface"
+        return 0
+    fi
+    
+    # Method 3: Fallback to first available
+    local fallback=\$(ip route | grep '^default' | awk '{print \$5}' | head -1)
+    if [ -n "\$fallback" ]; then
+        echo "⚠️  Using fallback interface: \$fallback" >&2
+        echo "\$fallback"
+        return 0
+    fi
+    
+    echo "❌ No suitable internet interface found" >&2
+    return 1
 }
 
 # Function to setup NAT rules for multiple interfaces
@@ -765,7 +925,7 @@ setup_nat() {
 }
 
 # Main execution
-INTERNET_IFACE=\$(detect_internet_interface)
+INTERNET_IFACE=\$(detect_best_internet_interface)
 setup_nat "\$INTERNET_IFACE"
 EOF
     

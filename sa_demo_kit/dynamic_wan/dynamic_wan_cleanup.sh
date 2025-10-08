@@ -20,15 +20,15 @@ check_interface() {
 read_dynamicwan_state_file() {
     local dynamicwan_state_file="/etc/dynamicwan_configured_interfaces.conf"
     
-    echo "🔍 Reading Dynamic WAN state file for configured interfaces..."
-    echo "   State file: $dynamicwan_state_file"
+    echo "🔍 Reading Dynamic WAN state file for configured interfaces..." >&2
+    echo "   State file: $dynamicwan_state_file" >&2
     
     if [ ! -f "$dynamicwan_state_file" ]; then
-        echo "⚠️  Dynamic WAN state file not found: $dynamicwan_state_file"
-        echo "   This means either:"
-        echo "   • Dynamic WAN setup script was never run on this server"
-        echo "   • Dynamic WAN setup script was run with an older version"
-        echo "   • State file was manually deleted"
+        echo "⚠️  Dynamic WAN state file not found: $dynamicwan_state_file" >&2
+        echo "   This means either:" >&2
+        echo "   • Dynamic WAN setup script was never run on this server" >&2
+        echo "   • Dynamic WAN setup script was run with an older version" >&2
+        echo "   • State file was manually deleted" >&2
         return 1
     fi
     
@@ -36,9 +36,9 @@ read_dynamicwan_state_file() {
     local dynamicwan_interfaces=""
     local interface_count=0
     
-    echo "   State file contents:"
+    echo "   State file contents:" >&2
     while IFS= read -r line; do
-        echo "     $line"
+        echo "     $line" >&2
         if [[ "$line" =~ ^interface=(.+)$ ]]; then
             local interface_name="${BASH_REMATCH[1]}"
             dynamicwan_interfaces="$dynamicwan_interfaces $interface_name"
@@ -47,10 +47,10 @@ read_dynamicwan_state_file() {
     done < "$dynamicwan_state_file"
     
     if [ $interface_count -gt 0 ]; then
-        echo "✅ Found $interface_count Dynamic WAN configured interfaces: $dynamicwan_interfaces"
+        echo "✅ Found $interface_count Dynamic WAN configured interfaces: $dynamicwan_interfaces" >&2
         echo "$dynamicwan_interfaces"
     else
-        echo "⚠️  No interfaces found in Dynamic WAN state file"
+        echo "⚠️  No interfaces found in Dynamic WAN state file" >&2
         return 1
     fi
 }

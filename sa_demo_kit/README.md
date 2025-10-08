@@ -147,14 +147,8 @@ Common interface names include:
 # List all network interfaces
 ip link show
 
-# List interfaces with status
+# List interfaces with IP addresses
 ip addr show
-
-# List only interface names
-ls /sys/class/net/
-
-# Check interface status and statistics
-ip -s link show
 
 # Check specific interface details
 ip link show <interface_name>
@@ -171,12 +165,6 @@ ip route show
 
 # Check default gateway
 ip route | grep default
-
-# Check interface speed and duplex
-ethtool <interface_name>
-
-# Check interface statistics
-cat /proc/net/dev
 ```
 
 ### Routing Commands
@@ -186,41 +174,54 @@ cat /proc/net/dev
 # Display full routing table
 ip route show
 
-# Display routing table with numeric addresses
-ip -n route show
-
 # Check specific route
 ip route get <destination_ip>
 
 # Check OSPF routes (after setup)
 ip route | grep 172.16
-
-# Monitor routing changes
-ip monitor route
 ```
 
-**Check FRR/OSPF Status**
+### Network Connectivity Commands
+
+**Basic Connectivity Tests**
 ```bash
-# Check if FRR container is running
-sudo docker exec frr_dyn vtysh -c "show ip route"
+# Test connectivity to specific IP
+ping <ip_address>
 
-# Check OSPF neighbors
-sudo docker exec frr_dyn vtysh -c "show ip ospf neighbor"
+# Test connectivity with specific interface
+ping -I <interface_name> <ip_address>
 
-# Check OSPF database
-sudo docker exec frr_dyn vtysh -c "show ip ospf database"
+# Test DNS resolution
+nslookup <domain_name>
 
-# Check FRR configuration
-sudo docker exec frr_dyn vtysh -c "show running-config"
+# Test with traceroute
+traceroute <ip_address>
+
+# Test with mtr (if available)
+mtr <ip_address>
 ```
 
-### Common Issues
+**Network Information**
+```bash
+# Check ARP table
+arp -a
+
+# Check network connections
+ss -tuln
+
+# Check network statistics
+cat /proc/net/dev
+
+# Check IP forwarding status
+cat /proc/sys/net/ipv4/ip_forward
+```
+
+### Common Network Issues
 
 **1. Interface Not Found**
 ```bash
 # Check available interfaces
 ip link show
-ls /sys/class/net/
 
 # Check if interface is up
 ip link show <interface_name>
@@ -229,80 +230,31 @@ ip link show <interface_name>
 sudo ip link set <interface_name> up
 ```
 
-**2. Docker Not Running**
+**2. Network Connectivity Issues**
 ```bash
-# Start Docker service
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Check Docker status
-sudo systemctl status docker
-
-# Check Docker containers
-sudo docker ps -a
-```
-
-**3. Netplan Configuration Issues**
-```bash
-# Check netplan status
-sudo netplan status
-
-# Apply netplan manually
-sudo netplan apply
-
-# Test netplan configuration
-sudo netplan try
-
-# Check netplan files
-ls /etc/netplan/
-cat /etc/netplan/*.yaml
-```
-
-**4. Container Issues**
-```bash
-# Check running containers
-sudo docker ps -a
-
-# Check container logs
-sudo docker logs frr_dyn
-sudo docker logs dhcpd_dyn
-sudo docker logs radiusd_dyn
-
-# Check container resource usage
-sudo docker stats
-
-# Restart specific container
-sudo docker restart <container_name>
-```
-
-**5. Network Connectivity Issues**
-```bash
-# Test connectivity to specific IP
-ping <ip_address>
+# Test basic connectivity
+ping 8.8.8.8
 
 # Test DNS resolution
-nslookup <domain_name>
+nslookup google.com
 
-# Check ARP table
-arp -a
+# Check routing to specific destination
+ip route get 8.8.8.8
 
-# Check network connections
-ss -tuln
-
-# Check firewall rules
-sudo iptables -L -n -v
+# Test with traceroute
+traceroute 8.8.8.8
 ```
 
-**6. IP Forwarding Issues**
+**3. IP Address Issues**
 ```bash
-# Check IP forwarding status
-cat /proc/sys/net/ipv4/ip_forward
+# Check current IP configuration
+ip addr show
 
-# Enable IP forwarding temporarily
-echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+# Check if IP is assigned to interface
+ip addr show <interface_name>
 
-# Check sysctl configuration
-cat /etc/sysctl.conf | grep ip_forward
+# Check routing table
+ip route show
 ```
 
 ### Rollback on Failure

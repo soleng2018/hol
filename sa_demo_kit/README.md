@@ -4,8 +4,6 @@
 
 🚀 The **sa_demo_kit** contains scripts for setting up and managing dynamic WAN configurations with support for 1, 2, or 4 uplink interfaces. This demo kit provides automated network configuration using FRR (Free Range Routing), DHCP, and RADIUS services running in Docker containers.
 
-**🚀 NEW: Fully Automated Setup** - It will automatically install all required packages and dependencies, making it perfect for fresh employees with no Linux/networking experience!
-
 ## Prerequisites
 
 ### System Requirements
@@ -142,14 +140,93 @@ Common interface names include:
 
 ## Troubleshooting
 
+### Network Interface Commands
+
+**Check Available Interfaces**
+```bash
+# List all network interfaces
+ip link show
+
+# List interfaces with status
+ip addr show
+
+# List only interface names
+ls /sys/class/net/
+
+# Check interface status and statistics
+ip -s link show
+
+# Check specific interface details
+ip link show <interface_name>
+ip addr show <interface_name>
+```
+
+**Check Interface Configuration**
+```bash
+# Check current IP addresses on all interfaces
+ip addr
+
+# Check routing table
+ip route show
+
+# Check default gateway
+ip route | grep default
+
+# Check interface speed and duplex
+ethtool <interface_name>
+
+# Check interface statistics
+cat /proc/net/dev
+```
+
+### Routing Commands
+
+**Check Routing Table**
+```bash
+# Display full routing table
+ip route show
+
+# Display routing table with numeric addresses
+ip -n route show
+
+# Check specific route
+ip route get <destination_ip>
+
+# Check OSPF routes (after setup)
+ip route | grep 172.16
+
+# Monitor routing changes
+ip monitor route
+```
+
+**Check FRR/OSPF Status**
+```bash
+# Check if FRR container is running
+sudo docker exec frr_dyn vtysh -c "show ip route"
+
+# Check OSPF neighbors
+sudo docker exec frr_dyn vtysh -c "show ip ospf neighbor"
+
+# Check OSPF database
+sudo docker exec frr_dyn vtysh -c "show ip ospf database"
+
+# Check FRR configuration
+sudo docker exec frr_dyn vtysh -c "show running-config"
+```
+
 ### Common Issues
 
 **1. Interface Not Found**
 ```bash
 # Check available interfaces
 ip link show
-# or
 ls /sys/class/net/
+
+# Check if interface is up
+ip link show <interface_name>
+
+# Bring interface up if needed
+sudo ip link set <interface_name> up
 ```
 
 **2. Docker Not Running**
@@ -157,24 +234,75 @@ ls /sys/class/net/
 # Start Docker service
 sudo systemctl start docker
 sudo systemctl enable docker
+
+# Check Docker status
+sudo systemctl status docker
+
+# Check Docker containers
+sudo docker ps -a
 ```
 
 **3. Netplan Configuration Issues**
 ```bash
 # Check netplan status
 sudo netplan status
+
 # Apply netplan manually
 sudo netplan apply
+
+# Test netplan configuration
+sudo netplan try
+
+# Check netplan files
+ls /etc/netplan/
+cat /etc/netplan/*.yaml
 ```
 
 **4. Container Issues**
 ```bash
 # Check running containers
 sudo docker ps -a
+
 # Check container logs
 sudo docker logs frr_dyn
 sudo docker logs dhcpd_dyn
 sudo docker logs radiusd_dyn
+
+# Check container resource usage
+sudo docker stats
+
+# Restart specific container
+sudo docker restart <container_name>
+```
+
+**5. Network Connectivity Issues**
+```bash
+# Test connectivity to specific IP
+ping <ip_address>
+
+# Test DNS resolution
+nslookup <domain_name>
+
+# Check ARP table
+arp -a
+
+# Check network connections
+ss -tuln
+
+# Check firewall rules
+sudo iptables -L -n -v
+```
+
+**6. IP Forwarding Issues**
+```bash
+# Check IP forwarding status
+cat /proc/sys/net/ipv4/ip_forward
+
+# Enable IP forwarding temporarily
+echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+
+# Check sysctl configuration
+cat /etc/sysctl.conf | grep ip_forward
 ```
 
 ### Rollback on Failure
@@ -223,5 +351,3 @@ For issues or questions:
 ---
 
 **⚠️ Important**: Always run the cleanup script when finished with the demo to restore your system to its original network configuration. The cleanup script only removes configurations, not packages.
-
-**🎉 Ready to Use**: This script is now production-ready and perfect for fresh employees with no Linux/networking experience!

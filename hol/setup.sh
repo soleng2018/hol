@@ -1760,6 +1760,9 @@ COPY ./clients.conf /etc/raddb/clients.conf
 COPY ./authorize /etc/raddb/mods-config/files/authorize
 COPY ./dictionary.nile /usr/share/freeradius/dictionary.nile
 COPY ./default /etc/freeradius/sites-available/default 
+RUN sed -i '/default_days/s/60/3650/g' /etc/raddb/certs/ca.cnf 
+RUN sed -i '/default_days/s/60/3650/g' /etc/raddb/certs/server.cnf
+RUN sed -i '/default_days/s/60/3650/g' /etc/raddb/certs/client.cnf
 RUN cd /etc/raddb/certs && rm *.pem *.key *.crt *.p12 *.txt *.crl *.der *.old *.csr *.mk && ./bootstrap
 EOF
 

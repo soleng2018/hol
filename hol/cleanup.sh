@@ -19,8 +19,8 @@ load_config() {
         mode) mode="$v" ;;
         interface) interface="$v" ;;
         numPods) numPods="$v" ;;
-        lan_ip) lan_ip="$v" ;;
-        lan_subnet) lan_subnet="$v" ;;
+        router_ip) router_ip="$v" ;;
+        nsb_uplink_ip) nsb_uplink_ip="$v" ;;
       esac
     fi
   done < "$CONFIG_FILE"

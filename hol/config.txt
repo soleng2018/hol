@@ -12,6 +12,6 @@ mode=trunk
 # (access mode always deploys one pod regardless of this value).
 numPods=15
 
-# LAN addressing inside FRR (setup.sh only).
-lan_ip=172.16.0.1/30
-lan_subnet=172.16.0.0/30
+# NSB / FRR addressing (setup.sh only).
+router_ip=172.16.0.1/30
+nsb_uplink_ip=172.16.0.0/30

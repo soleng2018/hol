@@ -8,21 +8,33 @@ check_interface() {
     fi
 }
 
+# Linux ifnames are at most 15 chars (IFNAMSIZ-1); parent.vlan may be too long for USB-style names.
+vlan_ifname() {
+    local parent="$1"
+    local vid="$2"
+    local cand="${parent}.${vid}"
+    if (( ${#cand} <= 15 )); then
+        printf '%s' "$cand"
+    else
+        printf 'hol-vlan-%s' "$vid"
+    fi
+}
+
 # Function to create bridge and VLAN
 create_bridge() {
     local podID=$1
     local vlanID=$2
-    local interfaceId=$interface.$vlanID
+    local interfaceId
     local bridgeName="br-lan-$podID"
 
     sudo ip link add name "$bridgeName" type bridge
     sudo ip link set "$bridgeName" up
 
     if [[ "$mode" == "trunk" ]]; then
-        local interfaceId=$interface.$vlanID
-        sudo ip link add link "$interface" name "$interfaceId" type vlan id "$vlanID"    
+        interfaceId=$(vlan_ifname "$interface" "$vlanID")
+        sudo ip link add link "$interface" name "$interfaceId" type vlan id "$vlanID"
     else
-        local interfaceId=$interface
+        interfaceId=$interface
     fi
     
     sudo ip link set "$interfaceId" up
@@ -211,27 +223,46 @@ configure_radiusd() {
 
 # --- MAIN SCRIPT ---
 
-# Prompt for inputs
-read -p "access or trunk (If unsure hit enter) [access]: " mode
-mode=${mode:-access}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config.txt"
 
-read -p "Enter host interface name (e.g., eth0) [eth0]: " interface
-interface=${interface:-eth0}
+load_config() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Error: $CONFIG_FILE not found. Create it next to this script (see comments inside config.txt)."
+    exit 1
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+      k="${BASH_REMATCH[1]}"
+      v="${BASH_REMATCH[2]}"
+      v="${v%"${v##*[![:space:]]}"}"
+      case "$k" in
+        mode) mode="$v" ;;
+        interface) interface="$v" ;;
+        numPods) numPods="$v" ;;
+        lan_ip) lan_ip="$v" ;;
+        lan_subnet) lan_subnet="$v" ;;
+      esac
+    fi
+  done < "$CONFIG_FILE"
+}
+
+load_config
+
+mode="${mode:-access}"
+interface="${interface:-eth0}"
 check_interface "$interface"
 
 if [[ "$mode" == "trunk" ]]; then
-  read -p "Enter number of pods [3]: " numPods
-  numPods=${numPods:-3}
+  numPods="${numPods:-3}"
 else
   numPods=1
 fi
 
-
-read -p "Enter LAN IP (e.g., 172.16.0.1/30) [172.16.0.1/30]: " lan_ip
-lan_ip=${lan_ip:-172.16.0.1/30}
-
-read -p "Enter LAN subnet (e.g., 172.16.0.0/30) [172.16.0.0/30]: " lan_subnet
-lan_subnet=${lan_subnet:-172.16.0.0/30}
+lan_ip="${lan_ip:-172.16.0.1/30}"
+lan_subnet="${lan_subnet:-172.16.0.0/30}"
 
 # Check if wan_net exisit. If not, create wan_net and extract the bridge information
 wan_net="br-wan-net"

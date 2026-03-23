@@ -1,0 +1,17 @@
+# Shared configuration for setup.sh and cleanup.sh
+# Lines starting with # are comments. Format: KEY=value (no spaces around = required)
+
+# Host NIC for the lab. Used for VLAN subinterfaces in trunk mode.
+# If parent.VLAN would exceed 15 characters, scripts use hol-vlan-<id> instead.
+interface=enx5c857e391ef3
+
+# Link mode: "access" (single pod) or "trunk" (multiple pods with VLANs per pod).
+mode=trunk
+
+# Number of pods. Used by cleanup.sh always. For setup.sh, only applies when mode=trunk
+# (access mode always deploys one pod regardless of this value).
+numPods=15
+
+# LAN addressing inside FRR (setup.sh only).
+lan_ip=172.16.0.1/30
+lan_subnet=172.16.0.0/30

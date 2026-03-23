@@ -1,15 +1,49 @@
 #!/bin/bash
 
-echo "Tearing down FRR lab setup..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${SCRIPT_DIR}/config.txt"
 
-# Prompt for number of pods
-echo -n "Enter number of pods to clean up: "
-read numPods
+load_config() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "Error: $CONFIG_FILE not found. Create it next to this script (see comments inside config.txt)."
+    exit 1
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+      k="${BASH_REMATCH[1]}"
+      v="${BASH_REMATCH[2]}"
+      v="${v%"${v##*[![:space:]]}"}"
+      case "$k" in
+        mode) mode="$v" ;;
+        interface) interface="$v" ;;
+        numPods) numPods="$v" ;;
+        lan_ip) lan_ip="$v" ;;
+        lan_subnet) lan_subnet="$v" ;;
+      esac
+    fi
+  done < "$CONFIG_FILE"
+}
 
-# Prompt for host interface (used for VLAN)
-echo -n "Enter host interface used for VLANs (e.g., eth0): "
-read interface
+load_config
 
+interface="${interface:-eth0}"
+numPods="${numPods:-3}"
+
+# Must match setup.sh: Linux ifname max 15 chars, so long parents use hol-vlan-<vid>.
+vlan_ifname() {
+  local parent="$1"
+  local vid="$2"
+  local cand="${parent}.${vid}"
+  if (( ${#cand} <= 15 )); then
+    printf '%s' "$cand"
+  else
+    printf 'hol-vlan-%s' "$vid"
+  fi
+}
+
+echo "Tearing down FRR lab setup (interface=$interface, numPods=$numPods)..."
 echo "---------------------------------------"
 
 # WAN network bridge
@@ -33,9 +67,10 @@ for ((i=1; i<=numPods; i++)); do
     # Delete LAN bridge
     sudo ip link delete br-lan-$i type bridge &>/dev/null && echo "  🔧 Deleted bridge br-lan-$i"
 
-    # Delete VLAN subinterface
+    # Delete VLAN subinterface (name matches setup.sh vlan_ifname)
     vlanID=$((10 + i))
-    sudo ip link delete "$interface.$vlanID" &>/dev/null && echo "  🚫 Removed VLAN subinterface $interface.$vlanID"
+    vlan_iface=$(vlan_ifname "$interface" "$vlanID")
+    sudo ip link delete "$vlan_iface" &>/dev/null && echo "  🚫 Removed VLAN subinterface $vlan_iface"
 
     # Remove FRR config file
     rm -f frr$i.conf && echo "  🗃️  Deleted frr$i.conf"

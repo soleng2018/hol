@@ -46,6 +46,10 @@ Values below come from `setup.sh` (generated `dhcpd.conf` and container addressi
 
 Default/max lease times are **600s / 7200s** where ranges are defined.
 
+**Nile Portal:** In Nile Portal, add **172.16.253.2** as an external DHCP server, then add any of the subnets listed above. Wired and wireless clients on segments mapped to those subnets will receive an address from this server.
+
+**Adding scopes:** To serve more subnets, edit **`setup.sh`** and add the new `subnet` blocks in the section that generates **`dhcpd.conf`**. Then run **`./cleanup.sh`** and **`./setup.sh`** again. If you use **`install.sh`**, restart the machine so the service runs setup with your changes.
+
 ---
 
 ## RADIUS
@@ -73,6 +77,8 @@ The lab also returns the **Nile** vendor-specific attribute **`netseg`** (see `d
 | `bob` | `hello` | *(none)* |
 | `employee` | `nilesecure` | **Employee** |
 | `contractor` | `nilesecure` | **Contractor** |
+
+**Nile Portal:** Add **172.16.254.2** as an external RADIUS server with shared secret **nile123**. You can use **`bob`** / **`hello`** as a simple way to test that RADIUS is reachable. Create segments (for example **Employee** and **Contractor**), attach them to an **802.1X** SSID, and connect using the **`employee`** and **`contractor`** usernames (with password **`nilesecure`**) to see authentication and how **`netseg`** is applied.
 
 These are lab defaults. Change them in the generated files (or in `setup.sh` if you regenerate from source) before any real deployment.
 

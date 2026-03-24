@@ -39,7 +39,6 @@ Values below come from `setup.sh` (generated `dhcpd.conf` and container addressi
 
 | Subnet | Netmask | Notes |
 |--------|---------|--------|
-| 172.16.253.0 | 255.255.255.0 | Declared empty (topology / no leases here) |
 | 192.168.18.0 | 255.255.255.0 | One fixed lease: **192.168.18.11**; gateway **192.168.18.1**; DNS **8.8.8.8**; domain `selab.net` |
 | 192.168.19.0 | 255.255.255.0 | Range **192.168.19.11–192.168.19.254**; gateway **192.168.19.1** |
 | 192.168.20.0 | 255.255.255.0 | Range **192.168.20.11–192.168.20.254**; gateway **192.168.20.1** |
@@ -78,7 +77,7 @@ The lab also returns the **Nile** vendor-specific attribute **`netseg`** (see `d
 | `employee` | `nilesecure` | **Employee** |
 | `contractor` | `nilesecure` | **Contractor** |
 
-**Nile Portal:** Add **172.16.254.2** as an external RADIUS server with shared secret **nile123**. You can use **`bob`** / **`hello`** as a simple way to test that RADIUS is reachable. Create segments (for example **Employee** and **Contractor**), attach them to an **802.1X** SSID, and connect using the **`employee`** and **`contractor`** usernames (with password **`nilesecure`**) to see authentication and how **`netseg`** is applied.
+**Nile Portal:** Add **172.16.254.2** as an external RADIUS server with shared secret **nile123**. You can use **`bob`** / **`hello`** as a simple way to test that RADIUS is reachable. Create segments **Employee** and **Contractor**, attach them to an **802.1X** SSID, and connect using the **`employee`** and **`contractor`** usernames (with password **`nilesecure`**) to see authentication and how **`netseg`** is applied.
 
 These are lab defaults. Change them in the generated files (or in `setup.sh` if you regenerate from source) before any real deployment.
 
